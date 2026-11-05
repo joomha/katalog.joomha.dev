@@ -1,0 +1,46 @@
+# ==============================================================================
+# Agent Prompts & Context (11 files)
+# ==============================================================================
+SHARED_CONTEXT.md
+agent_01_setup_awal.md
+agent_02_identity_akses_pengguna.md
+agent_03_katalog_storefront_produk.md
+agent_04_commerce_payment_gateway.md
+agent_05_lms_engine_lengkap.md
+agent_06_les_privat_pricing_jadwal.md
+agent_07_jasa_digitalisasi_proyek.md
+agent_08_ai_consultant_rag_openrouter.md
+agent_09_admin_notifikasi_platform.md
+agent_10_integrasi_qa_deployment.md
+# Alternatif pola wildcard:
+# agent_*.md
+
+# Dokumen ringkasan konsep bisnis (uncomment jika ini file ke-11 yang Anda maksud atau ingin diabaikan juga)
+summary_konsep_bisnis_joomha_education.md
+
+# ==============================================================================
+# Dependencies & Build Output (Next.js / Node.js)
+# ==============================================================================
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Environment variables
+.env
+.env*.local
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
