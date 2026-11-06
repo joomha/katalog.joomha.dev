@@ -1,0 +1,97 @@
+import fs from "fs";
+import path from "path";
+import { RAW_SEED_ITEMS } from "../src/modules/catalog/data/seed-items";
+
+const outputDir = path.join(process.cwd(), "public", "images", "catalog");
+if (!fs.existsSync(outputDir)) {
+  fs.mkdirSync(outputDir, { recursive: true });
+}
+
+function getThemeColors(type: string, field: string) {
+  if (type === "SELF_PACED_COURSE") {
+    if (field.includes("Office")) return { from: "#1e3a8a", to: "#3b82f6", tag: "KURSUS OFFICE", badge: "#60a5fa" };
+    if (field.includes("AI")) return { from: "#4c1d95", to: "#8b5cf6", tag: "KURSUS AI", badge: "#c4b5fd" };
+    return { from: "#0f766e", to: "#14b8a6", tag: "KURSUS CODING", badge: "#5eead4" };
+  }
+  if (type === "DIGITAL_PRODUCT") {
+    if (field.includes("AI")) return { from: "#581c87", to: "#a855f7", tag: "PROMPT AI PACK", badge: "#e9d5ff" };
+    if (field.includes("Office")) return { from: "#1e293b", to: "#475569", tag: "TEMPLATE PRAKTIS", badge: "#cbd5e1" };
+    return { from: "#115e59", to: "#0d9488", tag: "DIGITAL WORKBOOK", badge: "#99f6e4" };
+  }
+  // BUSINESS_SERVICE
+  if (field.includes("AI")) return { from: "#311042", to: "#6b21a8", tag: "AI SOLUTIONS", badge: "#d8b4fe" };
+  if (field.includes("Web")) return { from: "#0c4a6e", to: "#0284c7", tag: "WEB & APP DEV", badge: "#7dd3fc" };
+  return { from: "#1e1b4b", to: "#4338ca", tag: "KONSULTASI BISNIS", badge: "#a5b4fc" };
+}
+
+function generateSvg(title: string, type: string, field: string, priceLabel: string): string {
+  const theme = getThemeColors(type, field);
+  const cleanTitle = title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${theme.from}"/>
+      <stop offset="100%" stop-color="${theme.to}"/>
+    </linearGradient>
+    <linearGradient id="overlay" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.6)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" fill="url(#bg)"/>
+  <rect width="800" height="500" fill="url(#grid)"/>
+
+  <!-- Geometric Abstract Accent -->
+  <circle cx="700" cy="80" r="140" fill="rgba(255,255,255,0.06)"/>
+  <circle cx="720" cy="400" r="180" fill="rgba(255,255,255,0.04)"/>
+  <rect x="0" y="300" width="800" height="200" fill="url(#overlay)"/>
+
+  <!-- Top Badge / Category -->
+  <g transform="translate(60, 60)">
+    <rect width="210" height="34" rx="17" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+    <circle cx="20" cy="17" r="6" fill="${theme.badge}"/>
+    <text x="35" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" fill="#ffffff" letter-spacing="1">${theme.tag}</text>
+  </g>
+
+  <!-- Brand Signature -->
+  <g transform="translate(600, 60)">
+    <text x="140" y="24" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="800" fill="rgba(255,255,255,0.8)" letter-spacing="0.5">JOOMHA EDU</text>
+  </g>
+
+  <!-- Center Content / Title -->
+  <g transform="translate(60, 240)">
+    <text x="0" y="0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="34" font-weight="900" fill="#ffffff" width="680">
+      ${cleanTitle}
+    </text>
+    <text x="0" y="45" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="500" fill="rgba(255,255,255,0.85)">
+      Bidang: ${field}
+    </text>
+  </g>
+
+  <!-- Bottom Details & Price -->
+  <g transform="translate(60, 420)">
+    <line x1="0" y1="-20" x2="680" y2="-20" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+    <text x="0" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" fill="rgba(255,255,255,0.7)">
+      Joomha Education Platform
+    </text>
+    <text x="680" y="15" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" fill="#ffffff">
+      ${priceLabel}
+    </text>
+  </g>
+</svg>`;
+}
+
+for (const item of RAW_SEED_ITEMS) {
+  const filePath = path.join(outputDir, `${item.slug}.svg`);
+  const svgContent = generateSvg(item.title, item.type, item.field, item.priceLabel);
+  fs.writeFileSync(filePath, svgContent, "utf-8");
+}
+
+console.log(`Generated 45 SVG covers in ${outputDir}`);
+
