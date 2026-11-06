@@ -132,13 +132,13 @@ model KnowledgeDocument {
 
 model KnowledgeChunk {
   id             String   @id @default(uuid()) @db.Uuid
-  documentId     String   @db.Uuid
-  chunkIndex     Int
+  documentId     String   @map("document_id") @db.Uuid
+  chunkIndex     Int      @map("chunk_index")
   content        String   @db.Text
   tokenEstimate  Int?
   embedding      Unsupported("vector(1536)")?
   metadata       Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
   document       KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, chunkIndex])
