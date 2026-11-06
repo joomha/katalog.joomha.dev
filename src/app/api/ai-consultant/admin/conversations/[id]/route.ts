@@ -22,7 +22,13 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       },
     });
     if (!conversation) return NextResponse.json({ error: "Percakapan tidak ditemukan." }, { status: 404 });
-    return NextResponse.json({ conversation });
+    const safeConversation = {
+      ...conversation,
+      messages: conversation.consentScope.includes("TRANSCRIPT") ? conversation.messages : [],
+      lead: conversation.consentScope.includes("CONTACT_DETAILS") ? conversation.lead : null,
+      summary: conversation.consentScope.includes("CONSULTATION_SUMMARY") ? conversation.summary : null,
+    };
+    return NextResponse.json({ conversation: safeConversation });
   } catch {
     return NextResponse.json({ error: "Akses admin/instruktur diperlukan." }, { status: 403 });
   }
