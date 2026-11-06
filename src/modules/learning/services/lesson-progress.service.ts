@@ -14,7 +14,7 @@ async function resolveLessonContext(lessonId: string, userId: string) {
   });
   if (!lesson || !lesson.isPublished) throw new Error("Lesson tidak ditemukan atau belum diterbitkan.");
   const enrollment = await getActiveEnrollmentForCourse(lesson.chapter.courseId, userId);
-  if (!enrollment) throw new Error("Enrollment aktif tidak ditemukan.");
+  if (!enrollment || enrollment.status !== "ACTIVE") throw new Error("Enrollment aktif tidak ditemukan.");
   const states = await loadChapterGateStates(lesson.chapter.courseId, enrollment.id);
   const chapterIndex = states.findIndex((chapter) => chapter.id === lesson.chapterId);
   if (!canAccessChapter(chapterIndex, states).allowed) throw new Error("Chapter masih terkunci.");
