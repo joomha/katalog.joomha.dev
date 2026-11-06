@@ -19,7 +19,8 @@ export async function retrieveKnowledge(
   const text = query.trim();
   if (!text || text.length > 8_000) return [];
   const [vector] = await embeddingProvider.embed([text]);
-  if (!vector?.length || vector.length !== 1536) return [];
+  const expectedDimensions = Number(process.env.OPENROUTER_EMBEDDING_DIMENSIONS || 1536);
+  if (!Number.isInteger(expectedDimensions) || !vector?.length || vector.length !== expectedDimensions) return [];
   const vectorLiteral = `[${vector.join(",")}]`;
   const limit = Math.min(Math.max(options.limit ?? 5, 1), 10);
   const roles = options.roles ?? [];
