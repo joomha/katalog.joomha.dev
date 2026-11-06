@@ -33,13 +33,13 @@ export async function listNotificationsForUser(options:NotificationListOptions={
  const user=await assertAuthenticated(),disabled=await prisma.notificationPreference.findMany({where:{userId:user.id,inAppEnabled:false},select:{category:true}});
  const hiddenCategories=disabled.map(item=>item.category).filter(category=>category!=="TRANSACTIONAL");
  const take=Math.max(1,Math.min(options.limit??20,100)),where={userId:user.id,category:{notIn:hiddenCategories},...(options.unreadOnly?{readAt:null}:{})};
- const [items,unreadCount]=await Promise.all([prisma.notification.findMany({where,orderBy:{createdAt:"desc"},take,...(options.cursor?{cursor:{id:options.cursor},skip:1}:{})}),prisma.notification.count({where:{userId:user.id,category:{notIn:hiddenCategories},readAt:null}})]);
+ const [items,unreadCount]=await Promise.all([prisma.notification.findMany({where,select:{id:true,category:true,title:true,body:true,resourceUrl:true,readAt:true,createdAt:true},orderBy:{createdAt:"desc"},take,...(options.cursor?{cursor:{id:options.cursor},skip:1}:{})}),prisma.notification.count({where:{userId:user.id,category:{notIn:hiddenCategories},readAt:null}})]);
  return {items,unreadCount};
 }
 export async function markNotificationRead(id:string){const user=await assertAuthenticated();const result=await prisma.notification.updateMany({where:{id,userId:user.id,readAt:null},data:{readAt:new Date()}});return {updated:result.count===1};}
 export async function markAllNotificationsRead(){const user=await assertAuthenticated();const result=await prisma.notification.updateMany({where:{userId:user.id,readAt:null},data:{readAt:new Date()}});return {updatedCount:result.count};}
-export async function getNotificationPreferences(){const user=await assertAuthenticated();return prisma.notificationPreference.findMany({where:{userId:user.id},orderBy:{category:"asc"}});}
+export async function getNotificationPreferences(){const user=await assertAuthenticated();return prisma.notificationPreference.findMany({where:{userId:user.id},select:{category:true,inAppEnabled:true,emailEnabled:true},orderBy:{category:"asc"}});}
 export async function updateNotificationPreference(category:CreateNotificationInput["category"],values:{inAppEnabled?:boolean;emailEnabled?:boolean}){
  const user=await assertAuthenticated();if(category==="TRANSACTIONAL")throw new Error("Transactional notifications cannot be disabled");
- return prisma.notificationPreference.upsert({where:{userId_category:{userId:user.id,category}},create:{userId:user.id,category,inAppEnabled:values.inAppEnabled??true,emailEnabled:values.emailEnabled??true},update:values});
+ return prisma.notificationPreference.upsert({where:{userId_category:{userId:user.id,category}},create:{userId:user.id,category,inAppEnabled:values.inAppEnabled??true,emailEnabled:values.emailEnabled??true},update:values,select:{category:true,inAppEnabled:true,emailEnabled:true}});
 }
