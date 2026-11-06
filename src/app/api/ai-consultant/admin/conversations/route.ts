@@ -6,8 +6,11 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await assertRole(["ADMIN", "SUPERADMIN", "INSTRUCTOR"]);
+    const admin = await assertRole(["ADMIN", "SUPERADMIN", "INSTRUCTOR"]);
     const conversations = await prisma.consultationConversation.findMany({
+      where: admin.roles.includes("INSTRUCTOR") && !admin.roles.includes("ADMIN") && !admin.roles.includes("SUPERADMIN")
+        ? { assignedUserId: admin.id }
+        : {},
       select: {
         id: true, userId: true, mode: true, status: true, handoffReason: true,
         assignedUserId: true, consentAt: true, consentScope: true, lastMessageAt: true, createdAt: true,
