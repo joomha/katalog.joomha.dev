@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
 import { PERMISSIONS } from "@/modules/identity/permissions";
 import { AccessDeniedError } from "@/modules/identity/types";
@@ -36,7 +37,7 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
  const checksum=createHash("sha256").update(input.bytes).digest("hex"),key=checksum.slice(0,2)+"/"+randomUUID()+"."+extension;
  const adapter=getStorageAdapter();await adapter.put({key,bytes:input.bytes,contentType:mime});
  try{
-  const stored=await prisma.storedFile.create({data:{ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as object):undefined}});
+  const stored=await prisma.storedFile.create({data:{ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as Prisma.InputJsonObject):undefined}});
   await writeAuditLog({actorId:actor.id,action:"platform.file.uploaded",targetType:"StoredFile",targetId:stored.id,metadata:{mimeType:mime,sizeBytes:input.bytes.byteLength,visibility:stored.visibility}});
   return stored;
  }catch(error){await adapter.delete(key);throw error;}

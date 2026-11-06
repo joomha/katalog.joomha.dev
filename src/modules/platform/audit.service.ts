@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
 import { PERMISSIONS } from "@/modules/identity/permissions";
 import type { WriteAuditLogInput } from "./types";
@@ -23,7 +24,7 @@ export async function writeAuditLog(input:WriteAuditLogInput){
  if(!action||!targetType)throw new Error("Audit action and targetType are required");
  return prisma.auditLog.create({data:{
   actorId:input.actorId??null,action,targetType,targetId:input.targetId?.slice(0,128)??null,
-  metadata:input.metadata?(sanitize(input.metadata) as object):undefined,
+  metadata:input.metadata?(sanitize(input.metadata) as Prisma.InputJsonValue):undefined,
   correlationId:input.correlationId?.slice(0,128)??null,ipAddress:null
  }});
 }
