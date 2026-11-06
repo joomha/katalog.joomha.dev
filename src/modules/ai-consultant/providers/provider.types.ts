@@ -1,8 +1,24 @@
+export interface ChatToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   name?: string;
   tool_call_id?: string;
+  tool_calls?: ChatToolCall[];
+}
+
+export interface ChatToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export interface ChatCompletionOptions {
@@ -11,16 +27,14 @@ export interface ChatCompletionOptions {
   maxTokens?: number;
   timeoutMs?: number;
   messages: ChatMessage[];
+  tools?: ChatToolDefinition[];
 }
 
 export interface ChatCompletionResult {
   content: string;
   model: string;
-  usage?: {
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-  };
+  toolCalls?: ChatToolCall[];
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
   finishReason?: string | null;
 }
 
