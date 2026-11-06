@@ -10,20 +10,17 @@ async function persistNotification(input:CreateNotificationInput){
  const title=input.title.trim().slice(0,160),body=input.body.trim().slice(0,1200);
  if(!title||!body)throw new Error("Notification title and body are required");
  const pref=await prisma.notificationPreference.findUnique({where:{userId_category:{userId:input.userId,category:input.category}}});
- const inAppEnabled=input.category==="TRANSACTIONAL"||pref?.inAppEnabled!==false;
- const emailEnabled=input.category==="TRANSACTIONAL"||pref?.emailEnabled!==false;
  let notification=null,created=true;
- if(inAppEnabled){
-  const data={userId:input.userId,category:input.category,title,body,resourceUrl:safePath(input.resourceUrl),eventName:input.eventName??null,dedupeKey:input.dedupeKey??null};
-  if(input.dedupeKey){
-   try{notification=await prisma.notification.create({data});}
-   catch(error){
-    if((error as {code?:string}).code!=="P2002")throw error;
-    notification=await prisma.notification.findUnique({where:{dedupeKey:input.dedupeKey}});
-    created=false;
-   }
-  }else notification=await prisma.notification.create({data});
- }
+ const data={userId:input.userId,category:input.category,title,body,resourceUrl:safePath(input.resourceUrl),eventName:input.eventName??null,dedupeKey:input.dedupeKey??null};
+ if(input.dedupeKey){
+  try{notification=await prisma.notification.create({data});}
+  catch(error){
+   if((error as {code?:string}).code!=="P2002")throw error;
+   notification=await prisma.notification.findUnique({where:{dedupeKey:input.dedupeKey}});
+   created=false;
+  }
+ }else notification=await prisma.notification.create({data});
+ const emailEnabled=input.category==="TRANSACTIONAL"||pref?.emailEnabled!==false;
  if(created&&emailEnabled){
   const user=await prisma.user.findUnique({where:{id:input.userId},select:{email:true,isActive:true,emailVerified:true}});
   if(user?.isActive&&user.emailVerified){
@@ -37,8 +34,14 @@ export async function createNotification(input:CreateNotificationInput){await as
 export async function createNotificationFromSystemEvent(input:CreateNotificationInput){return persistNotification(input);}
 export async function createNotifications(inputs:CreateNotificationInput[]){await assertPermission(PERMISSIONS.PLATFORM_MANAGE);const out=[];for(const input of inputs)out.push(await persistNotification(input));return out;}
 export async function listNotificationsForUser(options:NotificationListOptions={}){
- const user=await assertAuthenticated(),take=Math.max(1,Math.min(options.limit??20,100)),where={userId:user.id,...(options.unreadOnly?{readAt:null}:{})};
- const [items,unreadCount]=await Promise.all([prisma.notification.findMany({where,orderBy:{createdAt:"desc"},take,...(options.cursor?{cursor:{id:options.cursor},skip:1}:{})}),prisma.notification.count({where:{userId:user.id,readAt:null}})]);
+ const user=await assertAuthenticated();
+ const disabled=await prisma.notificationPreference.findMany({where:{userId:user.id,inAppEnabled:false},select:{category:true}});
+ const hiddenCategories=disabled.map(item=>item.category);
+ const take=Math.max(1,Math.min(options.limit??20,100)),where={userId:user.id,category:{notIn:hiddenCategories},...(options.unreadOnly?{readAt:null}:{})};
+ const [items,unreadCount]=await Promise.all([
+  prisma.notification.findMany({where,orderBy:{createdAt:"desc"},take,...(options.cursor?{cursor:{id:options.cursor},skip:1}:{})}),
+  prisma.notification.count({where:{userId:user.id,category:{notIn:hiddenCategories},readAt:null}})
+ ]);
  return {items,unreadCount};
 }
 export async function markNotificationRead(id:string){const user=await assertAuthenticated();const result=await prisma.notification.updateMany({where:{id,userId:user.id,readAt:null},data:{readAt:new Date()}});return {updated:result.count===1};}
