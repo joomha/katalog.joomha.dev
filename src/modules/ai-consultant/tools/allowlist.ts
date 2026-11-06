@@ -83,13 +83,13 @@ export async function executeConsultantTool(name: string, rawArgs: string, conte
   if (name === "create_tutoring_draft" || name === "create_business_request_draft") {
     const args = draftInput.safeParse(parsedJson);
     if (!args.success) return { ok: false, error: "Draft memerlukan consent eksplisit." };
-    const mode = name === "create_tutoring_draft" ? "LEARNING" : "BUSINESS";
-    const lead = await prisma.consultationLead.upsert({
-      where: { conversationId: context.conversationId },
-      create: { conversationId: context.conversationId, userId: context.userId, mode, payload: { draft: true, details: args.data.details } },
-      update: { mode, payload: { draft: true, details: args.data.details } },
-    });
-    return { ok: true, draftId: lead.id, status: "DRAFT" };
+    // Model-generated tool arguments are not proof of user consent.
+    return {
+      ok: true, requiresExplicitConfirmation: true,
+      mode: name === "create_tutoring_draft" ? "LEARNING" : "BUSINESS",
+      details: args.data.details,
+      message: "Minta pengguna mengonfirmasi melalui aksi konfirmasi draft. Jangan mengklaim draft sudah tersimpan.",
+    };
   }
   if (name === "create_consultation_summary") {
     const args = summaryInput.safeParse(parsedJson);
@@ -105,16 +105,11 @@ export async function executeConsultantTool(name: string, rawArgs: string, conte
   if (name === "request_human_handoff") {
     const args = handoffInput.safeParse(parsedJson);
     if (!args.success) return { ok: false, error: "Handoff memerlukan consent eksplisit dan scope yang valid." };
-    const conversation = await prisma.consultationConversation.findUnique({ where: { id: context.conversationId } });
-    if (!conversation) return { ok: false, error: "Percakapan tidak ditemukan." };
-    const transcript = await prisma.consultationMessage.findMany({ where: { conversationId: context.conversationId }, orderBy: { createdAt: "asc" } });
-    const lead = await prisma.consultationLead.upsert({
-      where: { conversationId: context.conversationId },
-      create: { conversationId: context.conversationId, userId: conversation.userId, mode: conversation.mode, customerName: args.data.customerName, customerEmail: args.data.customerEmail, customerPhone: args.data.customerPhone, payload: { transcript, reason: "AI_ESCALATION_WITH_CONSENT" } },
-      update: { customerName: args.data.customerName, customerEmail: args.data.customerEmail, customerPhone: args.data.customerPhone, payload: { transcript, reason: "AI_ESCALATION_WITH_CONSENT" } },
-    });
-    await prisma.consultationConversation.update({ where: { id: context.conversationId }, data: { status: "PENDING_REVIEW", handoffReason: "AI_ESCALATION_WITH_CONSENT", consentAt: new Date(), consentScope: args.data.consentScope } });
-    return { ok: true, leadId: lead.id, status: "PENDING_REVIEW" };
+    // The model cannot grant consent on behalf of the customer.
+    return {
+      ok: true, requiresExplicitConfirmation: true, consentScope: args.data.consentScope,
+      message: "Minta pengguna menekan konfirmasi handoff. Jangan meneruskan transcript dari tool call ini.",
+    };
   }
   return { ok: false, error: "Tool tidak diizinkan." };
 }
