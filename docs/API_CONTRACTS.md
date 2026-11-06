@@ -18,7 +18,7 @@ file internal modul.
 | Session strategy | **JWT** (HttpOnly cookie `authjs.session-token`) | Credentials provider v5 tidak mendukung database session; cookie aman + rotasi built-in |
 | Adapter | `@auth/prisma-adapter@2.11.3` | Model `Account`/`Session`/`VerificationToken` siap dipakai bila OAuth diaktifkan |
 | Password hashing | `@node-rs/argon2@2.2.2` (Argon2id, m=19 MiB, t=2, p=1) | Rekomendasi Auth.js/OWASP untuk credentials |
-| Rate limiting | In-memory sliding window + tabel `auth_attempts` | Lapis cepat per-instance + tabel lintas instance; interface `RateLimiter` siap diganti Redis |
+| Rate limiting | In-memory sliding window + tabel `auth_attempts` | Lapis cepat per-instance + lapis lintas instance; interface `RateLimiter` siap diganti Redis |
 
 **Konfigurasi production session:** set `AUTH_SECRET` (32+ byte acak, `openssl rand -base64 33`),
 `AUTH_URL=https://edu.joomha.dev`, dan layani lewat HTTPS — Auth.js otomatis menandai cookie
@@ -50,17 +50,40 @@ pnpm identity:create-superadmin
 
 ```ts
 import {
-  getCurrentUser, requireUser, requireRole, requirePermission, requireAdminAccess,
-  assertAuthenticated, assertRole, assertPermission, assertOwnInstructorData, PERMISSIONS,
+  getCurrentUser,        // SafeUser | null (fresh dari DB, isActive diperiksa)
+  requireUser,           // redirect("/masuk") bila belum login
+  requireRole,           // requireRole(["INSTRUCTOR"]) → AccessDeniedError bila salah role
+  requirePermission,     // requirePermission(PERMISSIONS.CATALOG_MANAGE)
+  requireAdminAccess,    // guard shell /admin (ADMIN/SUPERADMIN/INSTRUCTOR)
+  assertAuthenticated,   // varian throw untuk server action/route handler
+  assertRole,
+  assertPermission,
+  assertOwnInstructorData, // guard data-scope instruktur (Agent 05/06)
+  PERMISSIONS,
 } from "@/modules/identity";
 ```
 
 **Pola halaman admin domain (Agent 03–09):**
 
 ```tsx
+// src/app/(admin)/admin/katalog/page.tsx (contoh milik Agent 03)
 import { requirePermission, PERMISSIONS } from "@/modules/identity";
 export default async function Page() {
   const admin = await requirePermission(PERMISSIONS.CATALOG_MANAGE);
+  // ...
+}
+```
+
+Guard layout `/admin` sudah menutup akses di level shell; halaman domain tetap WAJIB
+memanggil `requirePermission(...)` sesuai kebutuhan halamannya (defense in depth).
+
+**Pola server action:**
+
+```ts
+import { assertPermission, PERMISSIONS, AccessDeniedError, UnauthenticatedError } from "@/modules/identity";
+export async function updateCatalogItem() {
+  const admin = await assertPermission(PERMISSIONS.CATALOG_MANAGE);
+  // ...
 }
 ```
 
@@ -73,32 +96,45 @@ katalog/order/learning/tutoring/business/consultation + `users.view`. `SUPERADMI
 implisit semua. Tambahan individual via tabel `user_permissions`, pencabutan default
 via `role_permissions`.
 
+### Kontrak database lintas domain
+
+Domain lain **TIDAK menambahkan** `@relation` ke model identity. Untuk mengacu ke
+user/instruktur, gunakan kolom `userId String @db.Uuid` (+ `@@index`) pada file schema
+domain sendiri dan resolve join di application layer. Ini menjaga file
+`prisma/models/identity.prisma` tetap milik Agent 02.
+
+### Event identitas (untuk Agent 09)
+
+Modul identitas tidak menerbitkan event domain. Notifikasi (reset password, akun baru)
+akan dihubungkan oleh Agent 09 melalui `IdentityMailer` di
+`src/modules/identity/services/mailer.ts` — implementasikan interface itu pada
+driver SMTP (saat ini `MAIL_DRIVER=console` mencetak tautan ke log server).
+
 ---
 
 ## Catalog Module (Agent 03)
 
-*(Kontrak katalog dipublikasikan oleh Agent 03.)*
+*(Belum dipublikasikan — Agent 03 akan mengisi section ini.)*
 
 ## Commerce Module (Agent 04)
 
-*(Kontrak commerce dipublikasikan oleh Agent 04.)*
+*(Belum dipublikasikan.)*
 
 ## Learning Module (Agent 05)
 
-*(Kontrak learning dipublikasikan oleh Agent 05.)*
+*(Belum dipublikasikan.)*
 
 ## Tutoring Module (Agent 06)
 
-*(Kontrak tutoring dipublikasikan oleh Agent 06.)*
+*(Belum dipublikasikan.)*
 
 ## Business Services Module (Agent 07)
 
-*(Kontrak business services dipublikasikan oleh Agent 07.)*
+*(Belum dipublikasikan.)*
 
 ## AI Consultant Module (Agent 08)
 
-*(Kontrak AI Consultant dipublikasikan oleh Agent 08.)*
-
+*(Belum dipublikasikan.)*
 
 ---
 
@@ -113,9 +149,9 @@ via `role_permissions`.
 
 ### Storage
 - `uploadStoredFile(input)`: wajib login; menyimpan metadata di `StoredFile`, random storage key, SHA-256, allowlist extension/MIME, pemeriksaan signature konten, dan menerapkan `maxUploadBytes` dari SystemSetting.
-- `getAuthorizedFileAccess(fileId, authorizeEntitlement?)`: public file dapat diakses tanpa login; private file harus dimiliki user, admin, atau lolos callback entitlement.
+- `getAuthorizedFileAccess(fileId, authorizeEntitlement?)`: public file dapat diakses tanpa login; private file harus dimiliki user, pemegang `platform.manage`, atau lolos callback entitlement.
 - `deleteStoredFile(fileId)` / `archiveStoredFile(fileId)`: pemilik file atau pemegang `platform.manage`.
-- Local adapter menyimpan di luar `public/`; env lama yang menunjuk ke `public/uploads` akan fallback ke `node_modules/.cache/joomha-private-files`. S3 belum diaktifkan karena provider/SDK belum diputuskan.
+- Local adapter menyimpan di luar `public/`; env lama yang menunjuk ke `public/uploads` fallback ke `node_modules/.cache/joomha-private-files`. S3 belum diaktifkan karena provider/SDK belum diputuskan.
 
 ### Audit dan settings
 - `writeAuditLog(input)`: actor harus user aktif yang sedang login; aksi atas nama actor lain atau tanpa actor memerlukan `platform.manage`. Metadata sensitif disaring.
