@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const leadUpsert = vi.fn();
-const handoffUpdate = vi.fn();
-const summaryUpsert = vi.fn();
+const mocks = vi.hoisted(() => ({
+  leadUpsert: vi.fn(),
+  handoffUpdate: vi.fn(),
+  summaryUpsert: vi.fn(),
+}));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     catalogItem: { findMany: vi.fn(), findUnique: vi.fn() },
-    consultationLead: { upsert: leadUpsert },
-    consultationSummary: { upsert: summaryUpsert },
-    consultationConversation: { findUnique: vi.fn(), update: handoffUpdate },
+    consultationLead: { upsert: mocks.leadUpsert },
+    consultationSummary: { upsert: mocks.summaryUpsert },
+    consultationConversation: { findUnique: vi.fn(), update: mocks.handoffUpdate },
     consultationMessage: { findMany: vi.fn() },
   },
 }));
@@ -17,9 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
 import { executeConsultantTool } from "../tools/allowlist";
 
 describe("consultant tool consent boundary", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  beforeEach(() => vi.clearAllMocks());
 
   it("does not create a tutoring draft from model-generated consent", async () => {
     const result = await executeConsultantTool(
@@ -28,7 +28,7 @@ describe("consultant tool consent boundary", () => {
       { conversationId: "00000000-0000-4000-8000-000000000001" },
     );
     expect(result).toMatchObject({ ok: true, requiresExplicitConfirmation: true });
-    expect(leadUpsert).not.toHaveBeenCalled();
+    expect(mocks.leadUpsert).not.toHaveBeenCalled();
   });
 
   it("does not hand off a transcript from model-generated consent", async () => {
@@ -38,6 +38,6 @@ describe("consultant tool consent boundary", () => {
       { conversationId: "00000000-0000-4000-8000-000000000001" },
     );
     expect(result).toMatchObject({ ok: true, requiresExplicitConfirmation: true });
-    expect(handoffUpdate).not.toHaveBeenCalled();
+    expect(mocks.handoffUpdate).not.toHaveBeenCalled();
   });
 });
