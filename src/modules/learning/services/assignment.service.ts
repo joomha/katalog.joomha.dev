@@ -81,3 +81,16 @@ export async function listPendingAssignmentSubmissions() {
     },
   });
 }
+
+export async function getMyAssignmentSubmissions(courseId?: string) {
+  const user = await requireLearningUser();
+  return prisma.learningAssignmentSubmission.findMany({
+    where: {
+      enrollment: { userId: user.id, ...(courseId ? { courseId } : {}) },
+    },
+    orderBy: { submittedAt: "desc" },
+    include: {
+      assignment: { select: { id: true, title: true, maxScore: true, course: { select: { slug: true, title: true } } } },
+    },
+  });
+}
