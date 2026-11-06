@@ -18,7 +18,7 @@
     "db:generate": "prisma generate --schema=prisma --allow-no-models",
     "db:migrate:dev": "prisma migrate dev --schema=prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema=prisma",
-    "db:seed": "node -e \"console.log('Seed runner will be orchestrated by Agent 10')\"",
+    "db:seed": "tsx prisma/seed.ts",
     "identity:create-superadmin": "node src/modules/identity/cli/create-superadmin.mjs"
   },
   "dependencies": {
