@@ -1,0 +1,72 @@
+import "server-only";
+import { createHash, randomUUID } from "node:crypto";
+import path from "node:path";
+import { prisma } from "@/lib/db/prisma";
+import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
+import { PERMISSIONS } from "@/modules/identity/permissions";
+import { getStorageAdapter } from "@/lib/storage";
+import type { UploadStoredFileInput } from "./types";
+
+const MIME_EXTENSIONS:Record<string,string>={"application/pdf":"pdf","image/png":"png","image/jpeg":"jpg","image/webp":"webp","text/plain":"txt","text/markdown":"md"};
+const EXTENSION_MIME:Record<string,string>={pdf:"application/pdf",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",txt:"text/plain",md:"text/markdown"};
+function detectMime(bytes:Uint8Array,extension:string):string|null {
+ const starts=(...sig:number[])=>sig.every((b,i)=>bytes[i]===b);
+ if(starts(0x25,0x50,0x44,0x46,0x2d))return "application/pdf";
+ if(starts(0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a))return "image/png";
+ if(starts(0xff,0xd8,0xff))return "image/jpeg";
+ if(bytes.length>=12&&String.fromCharCode(...bytes.slice(0,4))==="RIFF"&&String.fromCharCode(...bytes.slice(8,12))==="WEBP")return "image/webp";
+ if(extension==="txt"||extension==="md"){
+  try{new TextDecoder("utf-8",{fatal:true}).decode(bytes);return EXTENSION_MIME[extension];}catch{return null;}
+ }
+ return null;
+}
+function normalizeName(name:string){
+ const base=path.basename(name).normalize("NFKC").replace(/[^\p{L}\p{N}._-]/gu,"_").slice(0,120);
+ const extension=path.extname(base).slice(1).toLowerCase();
+ if(!extension||!EXTENSION_MIME[extension])throw new Error("File extension is not allowed");
+ return {name:base,extension};
+}
+export async function uploadStoredFile(input:UploadStoredFileInput){
+ const actor=await assertAuthenticated();
+ if(input.ownerId&&input.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ const {name,extension}=normalizeName(input.originalName),mime=detectMime(input.bytes,extension);
+ if(!mime||mime!==EXTENSION_MIME[extension]||mime!==input.mimeType)throw new Error("File content does not match an allowed MIME type");
+ const max=input.maxSizeBytes??10*1024*1024;
+ if(input.bytes.byteLength===0||input.bytes.byteLength>max)throw new Error("File size is outside the allowed range");
+ const checksum=createHash("sha256").update(input.bytes).digest("hex");
+ const key=`${checksum.slice(0,2)}/${randomUUID()}.${extension}`;
+ const adapter=getStorageAdapter();
+ await adapter.put({key,bytes:input.bytes,contentType:mime});
+ try {
+  return await prisma.storedFile.create({data:{
+   ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",
+   mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,
+   visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as object):undefined
+  }});
+ } catch(error){await adapter.delete(key);throw error;}
+}
+export async function getAuthorizedFileAccess(
+ fileId:string,
+ authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>
+){
+ const actor=await assertAuthenticated();
+ const file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
+ if(!file)throw new Error("File not found");
+ if(file.visibility==="PRIVATE"){
+  const isOwner=file.ownerId===actor.id;
+  const isAdmin=actor.roles.includes("ADMIN")||actor.roles.includes("SUPERADMIN");
+  const entitled=authorizeEntitlement?await authorizeEntitlement({id:file.id,ownerId:file.ownerId,metadata:file.metadata}):false;
+  if(!isOwner&&!isAdmin&&!entitled)throw new Error("File access denied");
+ }
+ const bytes=await getStorageAdapter().get(file.storageKey);
+ return {metadata:file,bytes};
+}
+export async function deleteStoredFile(fileId:string){
+ const actor=await assertAuthenticated();
+ const file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
+ if(!file)return {deleted:false};
+ if(file.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ await getStorageAdapter().delete(file.storageKey);
+ await prisma.storedFile.update({where:{id:file.id},data:{status:"DELETED",deletedAt:new Date()}});
+ return {deleted:true};
+}
