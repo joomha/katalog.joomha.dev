@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { eventBus } from "@/lib/events";
 import { getCatalogItemBySlug } from "@/modules/catalog";
 import { assertAuthenticated, assertPermission, getCurrentUser } from "@/modules/identity/guards";
+import { AccessDeniedError } from "@/modules/identity/types";
 import { PERMISSIONS } from "@/modules/identity/permissions";
 import {
   BusinessProposalDraftSchema, BusinessServiceRequestSchema, ProjectDeliverableCreateSchema,
@@ -377,7 +378,13 @@ export async function decideBusinessProposal(proposalId: string, revisionId: str
       ? { ...proposal, request: { ...proposal.request, userId: actor.id } }
       : proposal;
     const project = accepted ? await createProjectInTransaction(tx, projectProposal, revision) : null;
-    if (accepted) await tx.businessServiceRequest.update({ where: { id: proposal.requestId }, data: { status: "CONVERTED_TO_PROJECT" } });
+    if (accepted) await tx.businessServiceRequest.update({
+      where: { id: proposal.requestId },
+      data: {
+        status: "CONVERTED_TO_PROJECT",
+        ...(verifiedGuestOwner ? { userId: actor.id } : {}),
+      },
+    });
     return { accepted, revision: updatedRevision, project, proposal };
   });
 
@@ -476,7 +483,12 @@ export async function updateProjectMilestone(milestoneId: string, input: unknown
   });
   if (!milestone) throw new BusinessServiceError("Milestone tidak ditemukan.", "NOT_FOUND");
   let isManager = false;
-  try { await assertPermission(PERMISSIONS.BUSINESS_MANAGE); isManager = true; } catch { /* customer path */ }
+  try {
+    await assertPermission(PERMISSIONS.BUSINESS_MANAGE);
+    isManager = true;
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+  }
   if (!isManager && milestone.project.customerUserId !== actor.id) {
     throw new BusinessServiceError("Anda tidak memiliki akses ke milestone ini.", "FORBIDDEN");
   }

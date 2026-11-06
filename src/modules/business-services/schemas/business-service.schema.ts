@@ -79,6 +79,15 @@ export const BusinessProposalDraftSchema = z.object({
   exclusions: stringList,
   validUntil: z.string().datetime({ offset: true }),
 }).superRefine((value, context) => {
+  if (value.scopeIn.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["scopeIn"], message: "Minimal satu ruang lingkup yang termasuk harus dicantumkan." });
+  }
+  if (value.deliverables.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["deliverables"], message: "Minimal satu deliverable harus dicantumkan." });
+  }
+  if (value.acceptanceCriteria.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["acceptanceCriteria"], message: "Kriteria penerimaan wajib dicantumkan." });
+  }
   const sequences = value.milestones.map((item) => item.sequence);
   if (new Set(sequences).size !== sequences.length) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["milestones"], message: "Nomor milestone tidak boleh duplikat." });
