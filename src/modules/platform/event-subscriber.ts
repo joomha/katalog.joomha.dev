@@ -13,7 +13,7 @@ if(!registry.__joomhaPlatformEventsRegistered){
   eventBus.subscribe(eventName,async event=>{
    const payload=event.payload&&typeof event.payload==="object"&&!Array.isArray(event.payload)
     ?event.payload as Record<string,unknown>:{};
-   await handlePlatformDomainEvent({eventId:event.eventId,eventName:event.eventName,payload});
+   try{await handlePlatformDomainEvent({eventId:event.eventId,eventName:event.eventName,payload});}\n   catch(error){console.error("[platform:event-notification-failed]",{eventName:event.eventName,eventId:event.eventId,errorCode:error instanceof Error?error.name:"UNKNOWN"});}
   });
  }
  registry.__joomhaPlatformEventsRegistered=true;
