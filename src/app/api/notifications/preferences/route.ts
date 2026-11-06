@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 import { getNotificationPreferences, updateNotificationPreference } from "@/modules/platform";
 import { NotificationCategory } from "@prisma/client";
 import { UnauthenticatedError } from "@/modules/identity/types";
-const schema=z.object({category:z.nativeEnum(NotificationCategory),inAppEnabled:z.boolean().optional(),emailEnabled:z.boolean().optional()}).refine(value=>value.inAppEnabled!==undefined||value.emailEnabled!==undefined);
+const schema=z.object({category:z.nativeEnum(NotificationCategory),inAppEnabled:z.boolean().optional(),emailEnabled:z.boolean().optional()}).refine(value=>value.inAppEnabled!==undefined||value.emailEnabled!==undefined).refine(value=>value.category!=="TRANSACTIONAL",{message:"Notifikasi transaksi wajib aktif"});
 export async function GET(){
  try{return NextResponse.json({items:await getNotificationPreferences()});}
  catch(error){if(error instanceof UnauthenticatedError)return NextResponse.json({error:"UNAUTHENTICATED"},{status:401});return NextResponse.json({error:"INTERNAL_ERROR"},{status:500});}
