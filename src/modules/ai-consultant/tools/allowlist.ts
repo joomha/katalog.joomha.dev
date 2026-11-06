@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import type { ChatToolDefinition } from "../providers/provider.types";
+import { consultationSummarySchema } from "../schemas/consultation.schema";
 
 const searchCatalogInput = z.object({
   query: z.string().trim().max(120).optional(),
@@ -20,12 +21,7 @@ const draftInput = z.object({
   consent: z.literal(true),
   details: z.record(z.string(), z.unknown()),
 });
-const summaryInput = z.object({
-  needs: z.string().min(1).max(3000),
-  targetOutcome: z.string().max(1500).optional(),
-  recommendations: z.array(z.string().max(300)).max(10).default([]),
-  nextAction: z.string().min(1).max(500),
-});
+const summaryInput = consultationSummarySchema.omit({ consultationId: true, type: true });
 const handoffInput = z.object({
   consent: z.literal(true),
   consentScope: z.array(z.enum(["TRANSCRIPT", "CONTACT_DETAILS", "CONSULTATION_SUMMARY"])).min(1),
@@ -94,7 +90,17 @@ export async function executeConsultantTool(name: string, rawArgs: string, conte
   if (name === "create_consultation_summary") {
     const args = summaryInput.safeParse(parsedJson);
     if (!args.success) return { ok: false, error: "Format summary tidak valid." };
-    const payload = { ...args.data, generatedAt: new Date().toISOString() };
+    const conversation = await prisma.consultationConversation.findUnique({
+      where: { id: context.conversationId },
+      select: { mode: true },
+    });
+    if (!conversation) return { ok: false, error: "Percakapan tidak ditemukan." };
+    const payload = {
+      consultationId: context.conversationId,
+      type: conversation.mode,
+      ...args.data,
+      generatedAt: new Date().toISOString(),
+    };
     const summary = await prisma.consultationSummary.upsert({
       where: { conversationId: context.conversationId },
       create: { conversationId: context.conversationId, payload },
