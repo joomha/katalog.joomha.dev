@@ -184,12 +184,9 @@ export async function saveAssessmentAttemptDraft(
 
 export async function submitAssessmentAttempt(attemptId: string, rawAnswers: unknown) {
   const user = await requireLearningUser();
-  const parsed = SubmitAssessmentAttemptSchema.parse({
-    attemptId,
-    ...(rawAnswers && typeof rawAnswers === "object" ? rawAnswers as Record<string, unknown> : {}),
-  });
+  const parsed = SubmitAssessmentAttemptSchema.parse(rawAnswers);
   const attempt = await prisma.assessmentAttempt.findUnique({
-    where: { id: parsed.attemptId },
+    where: { id: attemptId },
     include: {
       enrollment: { select: { userId: true } },
       assessment: { include: { questions: { include: { options: true } } } },
