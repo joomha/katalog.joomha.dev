@@ -1,11 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { assertAuthenticated } from "@/modules/identity/guards";
+import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
+import { PERMISSIONS } from "@/modules/identity/permissions";
 import type { CreateNotificationInput, NotificationListOptions } from "./types";
 import { sendEmailWithRetry } from "./notification-email";
 const SAFE_PATH=/^\/(?!\/)[\w\-/?.=&%#]*$/;
 function safePath(path?:string){if(!path)return null;if(!SAFE_PATH.test(path)||path.includes(".."))throw new Error("Unsafe notification resource path");return path;}
-export async function createNotification(input:CreateNotificationInput){
+async function persistNotification(input:CreateNotificationInput){
  const title=input.title.trim().slice(0,160),body=input.body.trim().slice(0,1200);
  if(!title||!body)throw new Error("Notification title and body are required");
  const pref=await prisma.notificationPreference.findUnique({where:{userId_category:{userId:input.userId,category:input.category}}});
@@ -17,13 +18,23 @@ export async function createNotification(input:CreateNotificationInput){
    : await prisma.notification.create({data});
  }
  if(input.email&&pref?.emailEnabled!==false){
-  // Keep transactional email generic: no order details, personal data, or private content.
   const result=await sendEmailWithRetry({to:input.email.to,subject:"Pemberitahuan Joomha Education",text:"Anda memiliki pemberitahuan baru di akun Joomha Education. Silakan masuk ke akun Anda untuk melihat detailnya."});
   if(!result.ok)console.error("[platform:email-failed]",{userId:input.userId,category:input.category,errorCode:result.errorCode});
  }
  return notification;
 }
-export async function createNotifications(inputs:CreateNotificationInput[]){const out=[];for(const input of inputs)out.push(await createNotification(input));return out;}
+/** Admin-only manual notification. Domain events use the trusted event handler. */
+export async function createNotification(input:CreateNotificationInput){
+ await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ return persistNotification(input);
+}
+export async function createNotificationFromSystemEvent(input:CreateNotificationInput){
+ return persistNotification(input);
+}
+export async function createNotifications(inputs:CreateNotificationInput[]){
+ await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ const out=[];for(const input of inputs)out.push(await persistNotification(input));return out;
+}
 export async function listNotificationsForUser(options:NotificationListOptions={}){
  const user=await assertAuthenticated(),take=Math.max(1,Math.min(options.limit??20,100));
  const where={userId:user.id,...(options.unreadOnly?{readAt:null}:{})};

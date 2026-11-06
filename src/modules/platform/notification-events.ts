@@ -1,6 +1,6 @@
 import "server-only";
 import type { NotificationCategory } from "@prisma/client";
-import { createNotification } from "./notification.service";
+import { createNotificationFromSystemEvent } from "./notification.service";
 export interface PlatformDomainEvent {eventId:string;eventName:string;payload:Record<string,unknown>}
 interface Template {category:NotificationCategory;title:string;body:string;resourceUrl:string}
 const TEMPLATES:Record<string,Template>={
@@ -13,9 +13,15 @@ const TEMPLATES:Record<string,Template>={
  "BusinessProposalSent":{category:"BUSINESS",title:"Proposal bisnis tersedia",body:"Proposal layanan digitalisasi telah tersedia untuk ditinjau.",resourceUrl:"/akun/proyek"},
  "ProjectMilestoneUpdated":{category:"BUSINESS",title:"Pembaruan milestone proyek",body:"Ada pembaruan pada milestone proyek Anda.",resourceUrl:"/akun/proyek"}
 };
+/** Trusted server-side adapter for the shared event bus; never call from a browser route. */
 export async function handlePlatformDomainEvent(event:PlatformDomainEvent){
- const template=TEMPLATES[event.eventName],userId=event.payload.userId;
- if(!template||typeof userId!=="string")return {handled:false};
- await createNotification({userId,category:template.category,title:template.title,body:template.body,resourceUrl:template.resourceUrl,eventName:event.eventName,dedupeKey:event.eventName+":"+event.eventId});
- return {handled:true};
+ const template=TEMPLATES[event.eventName];
+ const recipients=Array.isArray(event.payload.recipientUserIds)
+  ? event.payload.recipientUserIds.filter((value):value is string=>typeof value==="string")
+  : typeof event.payload.userId==="string"?[event.payload.userId]:[];
+ if(!template||!event.eventId||recipients.length===0)return {handled:false,created:0};
+ for(const userId of [...new Set(recipients)]){
+  await createNotificationFromSystemEvent({userId,category:template.category,title:template.title,body:template.body,resourceUrl:template.resourceUrl,eventName:event.eventName,dedupeKey:event.eventName+":"+event.eventId+":"+userId});
+ }
+ return {handled:true,created:new Set(recipients).size};
 }

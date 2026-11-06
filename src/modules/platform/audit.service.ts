@@ -16,6 +16,8 @@ export async function writeAuditLog(input:WriteAuditLogInput){
  if(input.actorId){
   const actor=await assertAuthenticated();
   if(actor.id!==input.actorId)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ }else{
+  await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  }
  const action=input.action.trim().slice(0,120),targetType=input.targetType.trim().slice(0,100);
  if(!action||!targetType)throw new Error("Audit action and targetType are required");
