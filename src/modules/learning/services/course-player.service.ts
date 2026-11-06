@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { requireLearningUser } from "./identity.adapter";
-import { canAccessChapter, canStartLessons, canStartChapterExam, chapterComplete } from "./progression.service";
+import { canAccessChapter, canStartLessons, canStartChapterExam, canStartFinalExam, chapterComplete } from "./progression.service";
 import { getActiveEnrollmentForCourse, loadChapterGateStates } from "./progression-query.service";
 
 export async function getEnrolledCoursePlayer(slug: string) {
@@ -83,6 +83,7 @@ export async function getEnrolledCoursePlayer(slug: string) {
         })),
       };
     }),
-    finalAssessments, certificate,
+    finalAssessments: finalAssessments.map((assessment) => ({ ...assessment, isAvailable: canStartFinalExam(gates).allowed })),
+    certificate,
   };
 }
