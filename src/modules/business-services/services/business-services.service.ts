@@ -135,7 +135,7 @@ export async function listCustomerBusinessRequests() {
             where: { status: { in: ["SENT", "ACCEPTED", "REJECTED"] } },
             orderBy: { version: "desc" }, take: 1,
             select: {
-              id: true, version: true, title: true, totalAmount: true, currency: true,
+              id: true, version: true, status: true, title: true, totalAmount: true, currency: true,
               timelineSummary: true, validUntil: true, sentAt: true,
               customerDecisionAt: true, customerFeedback: true,
             },
@@ -619,7 +619,7 @@ export async function createBusinessProjectFromAcceptedProposal(proposalId: stri
   const outcome = await prisma.$transaction(async (tx) => {
     const proposal = await tx.businessProposal.findUnique({
       where: { id: proposalId },
-      include: { request: true, revisions: { where: { status: "ACCEPTED" }, orderBy: { version: "desc" }, take: 1 }, project: true },
+      include: { request: true, revisions: { where: { status: "ACCEPTED" }, orderBy: { version: "desc" }, take: 1 }, project: { include: { paymentTerms: { orderBy: { sequence: "asc" } } } } },
     });
     if (!proposal) throw new BusinessServiceError("Proposal tidak ditemukan.", "NOT_FOUND");
     if (proposal.project) return { project: proposal.project, created: false, proposal };
@@ -636,7 +636,7 @@ export async function createBusinessProjectFromAcceptedProposal(proposalId: stri
       requestId: outcome.proposal.requestId, projectId: outcome.project.id,
       projectCode: outcome.project.projectCode, customerUserId: outcome.project.customerUserId,
       currency: outcome.project.currency,
-      paymentTerms: outcome.project.paymentTerms.map((term) => ({
+      paymentTerms: outcome.project.paymentTerms.map((term: { id: string; sequence: number; label: string; amount: unknown; currency: string; dueAt?: Date | null }) => ({
         paymentTermId: term.id, sequence: term.sequence, label: term.label,
         amount: Number(term.amount), currency: term.currency, dueAt: term.dueAt?.toISOString() ?? null,
       })),

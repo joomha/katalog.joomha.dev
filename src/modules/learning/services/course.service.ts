@@ -157,7 +157,7 @@ export async function publishCourse(courseId: string) {
     if (chapter.lessons.some((lesson) => !lesson.isPublished)) {
       throw new Error("Semua lesson wajib dalam chapter harus diterbitkan sebelum course.");
     }
-    const gatePolicy = (chapter.gatePolicy ?? {}) as { requireChapterExamPassed?: boolean };
+    const gatePolicy = (chapter.gatePolicy ?? {}) as { requireChapterExamPassed?: boolean; pretestRequiredBeforeLessons?: boolean };
     const chapterExam = chapter.assessments.some((assessment) => assessment.stage === "CHAPTER_EXAM");
     const pretest = chapter.assessments.some((assessment) => assessment.stage === "PRETEST");
     if (gatePolicy.pretestRequiredBeforeLessons && !pretest) {

@@ -56,7 +56,7 @@ export const AssignmentSubmissionSchema = z.object({
   assignmentId: z.string().uuid(), responseText: z.string().max(30_000).optional(),
   attachments: z.array(z.object({
     storageKey: z.string().min(1).max(500), fileName: z.string().min(1).max(255),
-    mimeType: z.string().min(1).max(120), sizeBytes: z.number().int().positive().max(25 * 1024 * 1024),
+    mimeType: z.string().min(1).max(120).optional(), contentType: z.string().min(1).max(120).optional(), sizeBytes: z.number().int().positive().max(25 * 1024 * 1024),
   })).max(10).default([]),
 }).refine((value) => Boolean(value.responseText?.trim()) || value.attachments.length > 0, {
   message: "Jawaban atau lampiran wajib diisi sebelum mengirim tugas.",

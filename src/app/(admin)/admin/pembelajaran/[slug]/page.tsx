@@ -81,15 +81,15 @@ export default async function LearningCourseAdminPage({ params }: PageProps) {
               <button className="rounded-md border px-3 py-2 text-xs font-semibold">Simpan materi</button>
             </form>}
           </div>)}</div>
-          {chapter.assessments.map((assessment: any) => <div key={assessment.id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
+          {chapter.assessments.map((assessment: { id: string; title: string; stage?: string; isPublished: boolean }) => <div key={assessment.id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
             <span>{assessment.title} · {assessment.stage} · {assessment.isPublished ? "Published" : "Draft"}</span>
             {!published && !assessment.isPublished && <form action={publishAssessmentAction}><input type="hidden" name="assessmentId" value={assessment.id} /><input type="hidden" name="courseSlug" value={course.slug} /><button className="text-xs font-semibold text-primary underline">Publish</button></form>}
           </div>)}
-          {chapter.games.map((game: any) => <div key={game.id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
+          {chapter.games.map((game: { id: string; title: string; type: string; isPublished: boolean }) => <div key={game.id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
             <span>{game.title} · {game.type} · {game.isPublished ? "Published" : "Draft"}</span>
             {!published && !game.isPublished && <form action={publishGameAction}><input type="hidden" name="gameId" value={game.id} /><input type="hidden" name="courseSlug" value={course.slug} /><button className="text-xs font-semibold text-primary underline">Publish</button></form>}
           </div>)}
-          {chapter.assignments.map((assignment: any) => <div key={assignment.id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
+          {chapter.assignments.map((assignment: { id: string; title: string; isPublished: boolean }) => <div key={assignment.id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
             <span>{assignment.title} · {assignment.isPublished ? "Published" : "Draft"}</span>
             {!published && !assignment.isPublished && <form action={publishAssignmentAction}><input type="hidden" name="assignmentId" value={assignment.id} /><input type="hidden" name="courseSlug" value={course.slug} /><button className="text-xs font-semibold text-primary underline">Publish</button></form>}
           </div>)}
@@ -112,7 +112,7 @@ export default async function LearningCourseAdminPage({ params }: PageProps) {
           <button className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Simpan assignment</button>
         </form>
       </section>}
-      {course.assessments.map((assessment: any) => <div key={assessment.id} className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4 text-sm">
+      {course.assessments.map((assessment: { id: string; title: string; isPublished: boolean }) => <div key={assessment.id} className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4 text-sm">
         <span>Final exam: {assessment.title} · {assessment.isPublished ? "Published" : "Draft"}</span>
         {!published && !assessment.isPublished && <form action={publishAssessmentAction}><input type="hidden" name="assessmentId" value={assessment.id} /><input type="hidden" name="courseSlug" value={course.slug} /><button className="text-xs text-primary underline">Publish</button></form>}
       </div>)}

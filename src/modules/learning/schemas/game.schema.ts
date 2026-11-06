@@ -72,7 +72,7 @@ export const TimedChallengeGameSchema = z.object({
 }).superRefine((g, ctx) => g.config.questions.forEach((q, i) => {
   if (!q.options.some((o) => o.id === q.correctOptionId)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Opsi benar tidak ditemukan.", path: ["config", "questions", i] });
 }));
-export const LearningGameConfigSchema = z.discriminatedUnion("type", [
+export const LearningGameConfigSchema = z.union([
   CrosswordGameSchema, MultipleChoiceGameSchema, TrueFalseGameSchema, MatchingPairsGameSchema, WordScrambleGameSchema,
   FillBlankGameSchema, FlashcardsGameSchema, OrderingGameSchema, TimedChallengeGameSchema,
 ]);

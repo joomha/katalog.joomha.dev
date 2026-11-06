@@ -225,7 +225,7 @@ export async function submitAssessmentAttempt(attemptId: string, rawAnswers: unk
     requiresManualReview: question.requiresManualReview,
     isRequired: question.isRequired,
   }));
-  const grade = scoreAssessment(definitions, parsed.answers, Number(attempt.assessment.passingScore));
+  const grade = scoreAssessment(definitions, parsed.answers.map((a) => ({ questionId: a.questionId, answer: a.answer ?? null })), Number(attempt.assessment.passingScore));
   const status = grade.pendingReview ? "PENDING_REVIEW" : "GRADED";
 
   await prisma.$transaction(async (tx) => {

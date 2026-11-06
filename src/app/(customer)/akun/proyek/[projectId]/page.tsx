@@ -5,7 +5,7 @@ import { getCustomerBusinessProjectProgress } from "@/modules/business-services"
 import { MilestoneReviewControls } from "@/modules/business-services/components/milestone-review-controls";
 import { DeliverableReviewControls } from "@/modules/business-services/components/deliverable-review-controls";
 import { HandoverConfirmation } from "@/modules/business-services/components/handover-confirmation";
-import { ProposalDecisionControls } from "@/modules/business-services/components/proposal-decision-controls";
+
 
 export const metadata: Metadata = { title: "Detail Proyek" };
 const money = (amount: number, currency: string) => new Intl.NumberFormat("id-ID", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);

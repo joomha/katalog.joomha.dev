@@ -3,7 +3,23 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { startGameAttemptAction, submitGameAttemptAction } from "@/modules/learning/actions";
 
-type PublicGame = { type: string; title: string; introduction?: string; instructions?: string; [key: string]: any };
+type PublicGame = {
+  type: string;
+  title: string;
+  introduction?: string;
+  instructions?: string;
+  rows?: number;
+  columns?: number;
+  entries?: Array<{ id: string; number: number; clue: string; length: number }>;
+  questions?: Array<{ id: string; prompt?: string; statement?: string; options?: Array<{ id: string; text: string }> }>;
+  leftItems?: Array<{ id: string; text: string }>;
+  rightItems?: Array<{ id: string; text: string }>;
+  words?: Array<{ id: string; clue: string; letters: string[] }>;
+  prompts?: Array<{ id: string; sentence: string }>;
+  cards?: Array<{ id: string; front: string; back: string; hint?: string }>;
+  items?: Array<{ id: string; text: string }>;
+  [key: string]: unknown;
+};
 type Grade = { percentage: number; passed: boolean; expired: boolean; correctCount: number; totalCount: number };
 
 function formatSeconds(value: number) {
@@ -97,13 +113,13 @@ export function LearningGameRunner({ gameId }: { gameId: string }) {
   let content: ReactNode = null;
   if (game.type === "CROSSWORD") {
     content = <div><p className="text-xs text-muted-foreground">Teka-teki silang · Grid {game.rows} × {game.columns}</p>
-      {renderInputs((game.entries ?? []).map((entry: any) => ({ id: entry.id, label: entry.number + ". " + entry.clue + " (" + entry.length + " huruf)" })))}
+      {renderInputs((game.entries ?? []).map((entry) => ({ id: entry.id, label: entry.number + ". " + entry.clue + " (" + entry.length + " huruf)" })))}
     </div>;
   } else if (game.type === "MULTIPLE_CHOICE" || game.type === "TIMED_CHALLENGE") {
-    content = <div className="space-y-4">{(game.questions ?? []).map((question: any, index: number) => (
+    content = <div className="space-y-4">{(game.questions ?? []).map((question, index: number) => (
       <fieldset key={question.id}>
         <legend className="text-sm font-medium">{index + 1}. {question.prompt}</legend>
-        <div className="mt-2 space-y-2">{question.options.map((option: any) => (
+        <div className="mt-2 space-y-2">{(question.options ?? []).map((option) => (
           <label key={option.id} className="flex items-center gap-2 text-sm">
             <input type="radio" name={question.id} checked={answers[question.id] === option.id} onChange={() => answer(question.id, option.id)} />
             {option.text}
@@ -112,7 +128,7 @@ export function LearningGameRunner({ gameId }: { gameId: string }) {
       </fieldset>
     ))}</div>;
   } else if (game.type === "TRUE_FALSE") {
-    content = <div className="space-y-4">{(game.questions ?? []).map((question: any, index: number) => (
+    content = <div className="space-y-4">{(game.questions ?? []).map((question, index: number) => (
       <fieldset key={question.id}>
         <legend className="text-sm font-medium">{index + 1}. {question.statement}</legend>
         <div className="mt-2 flex gap-4">{[{ value: true, label: "Benar" }, { value: false, label: "Salah" }].map((option) => (
@@ -124,17 +140,17 @@ export function LearningGameRunner({ gameId }: { gameId: string }) {
       </fieldset>
     ))}</div>;
   } else if (game.type === "MATCHING_PAIRS") {
-    content = <div className="space-y-3">{(game.leftItems ?? []).map((item: any) => (
+    content = <div className="space-y-3">{(game.leftItems ?? []).map((item) => (
       <label key={item.id} className="block text-xs">
         <span className="font-medium">{item.text}</span>
         <select value={String(answers[item.id] ?? "")} onChange={(event) => answer(item.id, event.target.value)} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm">
           <option value="">Pilih pasangan</option>
-          {(game.rightItems ?? []).map((right: any) => <option key={right.id} value={right.text}>{right.text}</option>)}
+          {(game.rightItems ?? []).map((right) => <option key={right.id} value={right.text}>{right.text}</option>)}
         </select>
       </label>
     ))}</div>;
   } else if (game.type === "WORD_SCRAMBLE") {
-    content = <div className="space-y-3">{(game.words ?? []).map((item: any) => (
+    content = <div className="space-y-3">{(game.words ?? []).map((item) => (
       <div key={item.id}>
         <p className="text-xs">{item.clue}</p>
         <p className="my-1 font-mono text-sm tracking-widest">{item.letters.join(" ")}</p>
@@ -142,14 +158,14 @@ export function LearningGameRunner({ gameId }: { gameId: string }) {
       </div>
     ))}</div>;
   } else if (game.type === "FILL_IN_THE_BLANK") {
-    content = <div className="space-y-3">{(game.prompts ?? []).map((item: any) => (
+    content = <div className="space-y-3">{(game.prompts ?? []).map((item) => (
       <label key={item.id} className="block text-xs">
         <span>{item.sentence}</span>
         <input value={String(answers[item.id] ?? "")} onChange={(event) => answer(item.id, event.target.value)} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" />
       </label>
     ))}</div>;
   } else if (game.type === "FLASHCARDS") {
-    content = <div className="space-y-3">{(game.cards ?? []).map((card: any) => (
+    content = <div className="space-y-3">{(game.cards ?? []).map((card) => (
       <div key={card.id} className="rounded-md border p-3">
         <p className="font-medium">{revealedCards[card.id] ? card.back : card.front}</p>
         {card.hint && !revealedCards[card.id] && <p className="mt-1 text-xs text-muted-foreground">Petunjuk: {card.hint}</p>}
@@ -164,7 +180,7 @@ export function LearningGameRunner({ gameId }: { gameId: string }) {
     ))}</div>;
   } else if (game.type === "ORDERING") {
     content = <div>
-      <ol className="list-inside list-decimal space-y-1 text-sm">{(game.items ?? []).map((item: any) => <li key={item.id}>{item.text}</li>)}</ol>
+      <ol className="list-inside list-decimal space-y-1 text-sm">{(game.items ?? []).map((item) => <li key={item.id}>{item.text}</li>)}</ol>
       <label className="mt-3 block text-xs">Urutan ID (pisahkan dengan koma)
         <input value={Array.isArray(answers.order) ? (answers.order as string[]).join(", ") : ""} onChange={(event) => answer("order", event.target.value.split(",").map((value) => value.trim()).filter(Boolean))} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="id-langkah-1, id-langkah-2, ..." />
       </label>

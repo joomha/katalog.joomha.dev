@@ -74,27 +74,27 @@ export async function createTextContentAction(formData: FormData) {
   revalidatePath("/admin/pembelajaran/" + required(formData, "courseSlug"));
 }
 export async function createAssessmentJsonAction(formData: FormData) {
-  const result = await createAssessment(jsonField(formData, "assessmentJson"));
+  await createAssessment(jsonField(formData, "assessmentJson"));
   revalidatePath("/admin/pembelajaran/" + required(formData, "courseSlug"));
-  return { id: result.id };
+
 }
 export async function publishAssessmentAction(formData: FormData) {
   await publishAssessment(required(formData, "assessmentId"));
   revalidatePath("/admin/pembelajaran/" + required(formData, "courseSlug"));
 }
 export async function createGameJsonAction(formData: FormData) {
-  const result = await createLearningGame(jsonField(formData, "gameJson"));
+  await createLearningGame(jsonField(formData, "gameJson"));
   revalidatePath("/admin/pembelajaran/" + required(formData, "courseSlug"));
-  return { id: result.id };
+
 }
 export async function publishGameAction(formData: FormData) {
   await publishLearningGame(required(formData, "gameId"));
   revalidatePath("/admin/pembelajaran/" + required(formData, "courseSlug"));
 }
 export async function createAssignmentJsonAction(formData: FormData) {
-  const result = await createAssignment(jsonField(formData, "assignmentJson"));
+  await createAssignment(jsonField(formData, "assignmentJson"));
   revalidatePath("/admin/pembelajaran/" + required(formData, "courseSlug"));
-  return { id: result.id };
+
 }
 export async function publishAssignmentAction(formData: FormData) {
   await publishAssignment(required(formData, "assignmentId"));
