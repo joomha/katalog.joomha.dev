@@ -26,7 +26,10 @@ function normalizeName(name:string){
  if(!extension||!EXTENSION_MIME[extension])throw new Error("File extension is not allowed");
  return {name:base,extension};
 }
-async function recordAuditSafely(input:Parameters<typeof writeAuditLog>[0]){\n try{await writeAuditLog(input);}catch(error){console.error("[platform:audit-write-failed]",{action:input.action,targetId:input.targetId,errorCode:error instanceof Error?error.name:"UNKNOWN"});}\n}\nexport async function uploadStoredFile(input:UploadStoredFileInput){
+async function recordAuditSafely(input:Parameters<typeof writeAuditLog>[0]){
+ try{await writeAuditLog(input);}catch(error){console.error("[platform:audit-write-failed]",{action:input.action,targetId:input.targetId,errorCode:error instanceof Error?error.name:"UNKNOWN"});}
+}
+export async function uploadStoredFile(input:UploadStoredFileInput){
  const actor=await assertAuthenticated();
  if(input.ownerId&&input.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  if(input.visibility==="PUBLIC"&&!actor.roles.includes("SUPERADMIN"))await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
