@@ -4,6 +4,7 @@ import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
 import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
 import { PERMISSIONS } from "@/modules/identity/permissions";
+import { AccessDeniedError } from "@/modules/identity/types";
 import { getStorageAdapter } from "@/lib/storage";
 import { writeAuditLog } from "./audit.service";
 import { getMaxUploadBytes } from "./settings.service";
@@ -27,6 +28,7 @@ function normalizeName(name:string){
 export async function uploadStoredFile(input:UploadStoredFileInput){
  const actor=await assertAuthenticated();
  if(input.ownerId&&input.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ if(input.visibility==="PUBLIC"&&!actor.roles.includes("SUPERADMIN"))await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  const {name,extension}=normalizeName(input.originalName),mime=detectMime(input.bytes,extension);
  if(!mime||mime!==EXTENSION_MIME[extension]||mime!==input.mimeType)throw new Error("File content does not match an allowed MIME type");
  const configuredMax=await getMaxUploadBytes(),max=Math.min(input.maxSizeBytes??configuredMax,configuredMax);
@@ -44,9 +46,10 @@ export async function getAuthorizedFileAccess(fileId:string,authorizeEntitlement
  if(!file)throw new Error("File not found");
  if(file.visibility==="PRIVATE"){
   const actor=await assertAuthenticated(),isOwner=file.ownerId===actor.id;
-  const isAdmin=actor.roles.includes("ADMIN")||actor.roles.includes("SUPERADMIN");
+  let hasManage=false;
+  try{await assertPermission(PERMISSIONS.PLATFORM_MANAGE);hasManage=true;}catch(error){if(!(error instanceof AccessDeniedError))throw error;}
   const entitled=authorizeEntitlement?await authorizeEntitlement({id:file.id,ownerId:file.ownerId,metadata:file.metadata}):false;
-  if(!isOwner&&!isAdmin&&!entitled)throw new Error("File access denied");
+  if(!isOwner&&!hasManage&&!entitled)throw new Error("File access denied");
  }
  const bytes=await getStorageAdapter().get(file.storageKey);
  return {metadata:file,bytes};
