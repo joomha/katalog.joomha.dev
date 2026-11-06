@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   summaryUpsert: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     catalogItem: { findMany: vi.fn(), findUnique: vi.fn() },
