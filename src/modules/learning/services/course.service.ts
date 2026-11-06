@@ -177,7 +177,7 @@ export async function publishCourse(courseId: string) {
     });
     if (assignmentCount === 0) throw new Error("Course mewajibkan assignment untuk sertifikat tetapi belum memiliki assignment wajib yang diterbitkan.");
   }
-  if (course.certificateEnabled && (policy.finalExamRequired ?? true)) {
+  if (course.certificateEnabled && (certificatePolicy.finalExamRequired ?? true)) {
     const count = await prisma.assessment.count({ where: { courseId, stage: "FINAL_EXAM", isPublished: true, isRequired: true } });
     if (!count) throw new Error("Course dengan sertifikat wajib memiliki final exam.");
   }
@@ -202,7 +202,7 @@ export async function publishChapter(chapterId: string) {
     where: { id: chapterId },
     include: {
       course: true, lessons: { where: { isPublished: true } },
-      assessments: { where: { isPublished: true, isRequired: true, stage: "CHAPTER_EXAM" } },
+      assessments: { where: { isPublished: true, isRequired: true, stage: { in: ["PRETEST", "CHAPTER_EXAM"] } } },
     },
   });
   if (!chapter || chapter.course.status === "PUBLISHED") throw new Error("Chapter tidak ditemukan atau course sudah dipublikasikan.");
