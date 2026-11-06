@@ -2,12 +2,10 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
-import { assertAuthenticated, getCurrentUser } from "@/modules/identity/guards";
-import { assertPermission } from "@/modules/identity/guards";
+import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
 import { PERMISSIONS } from "@/modules/identity/permissions";
 import { getStorageAdapter } from "@/lib/storage";
 import type { UploadStoredFileInput } from "./types";
-const MIME_EXTENSIONS:Record<string,string>={"application/pdf":"pdf","image/png":"png","image/jpeg":"jpg","image/webp":"webp","text/plain":"txt","text/markdown":"md"};
 const EXTENSION_MIME:Record<string,string>={pdf:"application/pdf",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",txt:"text/plain",md:"text/markdown"};
 function detectMime(bytes:Uint8Array,extension:string):string|null{
  const starts=(...sig:number[])=>sig.every((b,i)=>bytes[i]===b);
@@ -55,4 +53,11 @@ export async function deleteStoredFile(fileId:string){
  await getStorageAdapter().delete(file.storageKey);
  await prisma.storedFile.update({where:{id:file.id},data:{status:"DELETED",deletedAt:new Date()}});
  return {deleted:true};
+}
+export async function archiveStoredFile(fileId:string){
+ const actor=await assertAuthenticated(),file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
+ if(!file)return {archived:false};
+ if(file.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ await prisma.storedFile.update({where:{id:file.id},data:{status:"ARCHIVED",archivedAt:new Date()}});
+ return {archived:true};
 }
