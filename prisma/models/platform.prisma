@@ -1,5 +1,93 @@
-// ==============================================================================
-// PLATFORM DOMAIN SCHEMA (Owned by Agent 09)
-// SystemSetting, AuditLog, Notification, FileStorageRecord
-// ==============================================================================
-
+// Shared platform services. User IDs remain scalar UUIDs here to respect identity schema ownership;
+// add inverse User relation fields with Agent 02 before final migration if FK relations are required.
+enum NotificationCategory {
+  TRANSACTIONAL
+  LEARNING
+  TUTORING
+  BUSINESS
+  CONSULTATION
+  SYSTEM
+}
+enum StoredFileVisibility {
+  PRIVATE
+  PUBLIC
+}
+enum StoredFileStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  category NotificationCategory
+  title String
+  body String
+  resourceUrl String?
+  eventName String?
+  dedupeKey String? @unique
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, readAt, createdAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+model NotificationPreference {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  category NotificationCategory
+  inAppEnabled Boolean @default(true)
+  emailEnabled Boolean @default(true)
+  updatedAt DateTime @updatedAt
+  @@unique([userId, category])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String? @db.Uuid
+  action String
+  targetType String
+  targetId String?
+  metadata Json?
+  correlationId String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([action, createdAt])
+  @@index([correlationId])
+  @@map("audit_logs")
+}
+model StoredFile {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String? @db.Uuid
+  originalName String
+  storageKey String @unique
+  provider String
+  mimeType String
+  extension String
+  sizeBytes BigInt
+  checksumSha256 String
+  visibility StoredFileVisibility @default(PRIVATE)
+  status StoredFileStatus @default(ACTIVE)
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  archivedAt DateTime?
+  deletedAt DateTime?
+  @@index([ownerId, createdAt])
+  @@index([visibility, status])
+  @@map("stored_files")
+}
+model SystemSetting {
+  key String @id
+  value Json
+  description String?
+  isPublic Boolean @default(false)
+  updatedBy String? @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([isPublic])
+  @@map("system_settings")
+}

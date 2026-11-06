@@ -183,6 +183,41 @@ Sertifikat internal memiliki nomor unik, snapshot nama peserta/kursus/penerbit, 
 
 *(Belum dipublikasikan.)*
 
-## Platform Module (Agent 09)
+---
 
-*(Belum dipublikasikan.)*
+## Platform Module (Agent 09) — `src/modules/platform/index.ts`
+
+### Notification
+- `createNotification(input)` dan `createNotifications(inputs)`: operasi manual memerlukan `platform.manage`.
+- `listNotificationsForUser(options)`, `markNotificationRead(id)`, `markAllNotificationsRead()`, `getNotificationPreferences()`, `updateNotificationPreference(category, values)`: data dibatasi ke user dari session server.
+- Kategori `TRANSACTIONAL` wajib aktif; kategori non-esensial dapat di-opt-out.
+- Event handler tepercaya menerima `userId` atau `recipientUserIds: string[]`; dedupe key per event dan penerima.
+- Event dipetakan: `OrderPaid`, `OrderCancelled`, `CourseCompleted`, `CertificateIssued`, `TutoringQuoteAwaitingReview`, `QuoteApprovedByInstructor`, `TutoringSessionScheduled`, `ConsultationHandedOff`, `BusinessProposalApproved`, `ProjectMilestoneUpdated`; `EnrollmentCreated` juga didukung.
+
+### Schema integration note
+- Field `userId`, `ownerId`, `actorId`, dan `updatedBy` disimpan sebagai scalar UUID di schema platform pada branch ini agar tidak mengubah file identity milik Agent 02. Konfirmasi relasi/FK dan inverse fields bersama Agent 02 sebelum Agent 10 membuat migration.
+
+### Storage
+- `uploadStoredFile(input)`: wajib login; menyimpan metadata di `StoredFile`, random storage key, SHA-256, allowlist extension/MIME, pemeriksaan signature konten, dan menerapkan `maxUploadBytes` dari SystemSetting.
+- `getStoredFileMetadata(fileId, authorizeEntitlement?)` dan `getAuthorizedFileAccess(fileId, authorizeEntitlement?)`: public file dapat diakses tanpa login; private file harus dimiliki user, pemegang `platform.manage`, atau lolos callback entitlement. Metadata yang dikembalikan tidak mengekspos storage key.
+- `deleteStoredFile(fileId)` / `archiveStoredFile(fileId)`: pemilik file atau pemegang `platform.manage`.
+- Local adapter menyimpan di luar `public/` pada `node_modules/.cache/joomha-private-files` untuk development; env lama yang menunjuk ke `public/uploads` fallback ke lokasi ini. Local adapter ditolak pada production. S3 belum diaktifkan karena provider/SDK belum diputuskan.
+
+### Audit dan settings
+- `writeAuditLog(input)`: actor harus user aktif yang sedang login; aksi atas nama actor lain atau tanpa actor memerlukan `platform.manage`. Metadata sensitif disaring.
+- `listAuditLogs(options)` dan `getAdminSystemSettings()`: memerlukan `platform.view`.
+- `getPublicSystemSettings()`: hanya key publik allowlist.
+- `updateSystemSetting(key, value)`: typed allowlist dan memerlukan `platform.manage`; perubahan masuk audit log.
+- Secret/API key tidak dapat disimpan melalui SystemSetting.
+
+### API dan UI
+- `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `POST /api/notifications/read-all`, `GET/PATCH /api/notifications/preferences`.
+- `GET /api/files/:id` menjalankan pemeriksaan akses sebelum mengirim file.
+- `PATCH /api/admin/platform/settings` memvalidasi key/value dan permission.
+- Notification center: `/akun/notifikasi` dan `/admin/platform/notifikasi`; platform overview/settings/audit: `/admin/platform`; admin overview: `/admin`.
+
+### Email dan integrasi
+- Email adapter saat ini mock console logger untuk development; log hanya mencatat tujuan, subject, dan panjang pesan. Email notifikasi generik tidak membawa detail transaksi atau PII.
+- Provider SMTP belum dipilih/dikonfigurasi; `MAIL_DRIVER=smtp` belum aktif.
+- Event bus MVP bersifat in-process. Subscriber platform diregistrasikan ketika public module platform di-import di server. Publisher Agent 04–08 perlu memakai event name sesuai kontrak Shared Context.
+- Agent 05/08 wajib memanggil `getAuthorizedFileAccess` dengan entitlement callback yang memeriksa enrollment/akses knowledge document; jangan expose storage key.
