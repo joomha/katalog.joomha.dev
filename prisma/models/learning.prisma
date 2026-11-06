@@ -1,5 +1,398 @@
-// ==============================================================================
-// LEARNING DOMAIN SCHEMA (Owned by Agent 05)
-// Course, Chapter, Lesson, ContentBlock, Quiz, QuizAttempt, Certificate
-// ==============================================================================
+// Learning domain — ownership Agent 05. Cross-domain IDs are scalar by contract.
+// Agent 10 owns migration generation and seed orchestration.
 
+enum LearningCourseStatus { DRAFT COMING_SOON PUBLISHED ARCHIVED }
+enum CourseEnrollmentMode { PAID INVITE_ONLY OPEN }
+enum LearningEnrollmentStatus { ACTIVE COMPLETED SUSPENDED REVOKED EXPIRED }
+enum LessonProgressStatus { NOT_STARTED IN_PROGRESS COMPLETED }
+enum LessonContentType { TEXT VIDEO IMAGE FILE CODE EMBED LINK PRACTICE }
+enum AssessmentStage { PRETEST POSTTEST CHAPTER_EXAM FINAL_EXAM }
+enum AssessmentQuestionType { SINGLE_CHOICE MULTIPLE_SELECT TRUE_FALSE SHORT_ANSWER MATCHING ORDERING }
+enum AssessmentAttemptStatus { IN_PROGRESS SUBMITTED PENDING_REVIEW GRADED EXPIRED CANCELLED }
+enum LearningGameType { CROSSWORD MULTIPLE_CHOICE TRUE_FALSE MATCHING_PAIRS WORD_SCRAMBLE FILL_IN_THE_BLANK FLASHCARDS ORDERING TIMED_CHALLENGE }
+enum LearningGameAttemptStatus { IN_PROGRESS COMPLETED ABANDONED }
+enum AssignmentSubmissionStatus { SUBMITTED LATE UNDER_REVIEW GRADED RETURNED }
+enum CertificateStatus { DRAFT ISSUED REVOKED }
+
+model Course {
+  id String @id @default(uuid()) @db.Uuid
+  catalogItemId String @unique
+  slug String @unique
+  title String
+  shortDescription String?
+  description String @db.Text
+  status LearningCourseStatus @default(DRAFT)
+  enrollmentMode CourseEnrollmentMode @default(PAID)
+  language String @default("id")
+  level String?
+  estimatedDurationMinutes Int?
+  accessDurationDays Int?
+  learningOutcomes String[] @default([])
+  prerequisites String[] @default([])
+  certificateEnabled Boolean @default(true)
+  certificatePolicy Json?
+  publishedAt DateTime?
+  createdByUserId String? @db.Uuid
+  updatedByUserId String? @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chapters CourseChapter[]
+  enrollments LearningEnrollment[]
+  assessments Assessment[]
+  games LearningGame[]
+  assignments LearningAssignment[]
+  @@index([status, publishedAt])
+  @@index([createdByUserId])
+  @@map("learning_courses")
+}
+
+model CourseChapter {
+  id String @id @default(uuid()) @db.Uuid
+  courseId String @db.Uuid
+  title String
+  slug String
+  description String? @db.Text
+  displayOrder Int @default(0)
+  isRequired Boolean @default(true)
+  isPublished Boolean @default(false)
+  gatePolicy Json?
+  estimatedDurationMinutes Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+  assessments Assessment[]
+  games LearningGame[]
+  assignments LearningAssignment[]
+  @@unique([courseId, slug])
+  @@unique([courseId, displayOrder])
+  @@index([courseId, isPublished, displayOrder])
+  @@map("learning_course_chapters")
+}
+
+model Lesson {
+  id String @id @default(uuid()) @db.Uuid
+  chapterId String @db.Uuid
+  title String
+  slug String
+  description String? @db.Text
+  displayOrder Int @default(0)
+  estimatedDurationMinutes Int?
+  isRequired Boolean @default(true)
+  isPublished Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  chapter CourseChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  contentBlocks LessonContentBlock[]
+  progress LessonProgress[]
+  assessments Assessment[]
+  games LearningGame[]
+  assignments LearningAssignment[]
+  @@unique([chapterId, slug])
+  @@unique([chapterId, displayOrder])
+  @@index([chapterId, isPublished, displayOrder])
+  @@map("learning_lessons")
+}
+
+model LessonContentBlock {
+  id String @id @default(uuid()) @db.Uuid
+  lessonId String @db.Uuid
+  type LessonContentType
+  title String?
+  body String? @db.Text
+  resourceUrl String?
+  storageKey String?
+  codeLanguage String?
+  metadata Json?
+  displayOrder Int @default(0)
+  isRequired Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  @@index([lessonId, displayOrder])
+  @@map("learning_lesson_content_blocks")
+}
+
+model LearningEnrollment {
+  id String @id @default(uuid()) @db.Uuid
+  courseId String @db.Uuid
+  userId String @db.Uuid
+  orderId String?
+  status LearningEnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime @default(now())
+  accessStartsAt DateTime @default(now())
+  accessExpiresAt DateTime?
+  completedAt DateTime?
+  revokedAt DateTime?
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  lessonProgress LessonProgress[]
+  assessmentAttempts AssessmentAttempt[]
+  gameAttempts LearningGameAttempt[]
+  assignmentSubmissions LearningAssignmentSubmission[]
+  certificate LearningCertificate?
+  @@unique([courseId, userId])
+  @@unique([orderId, courseId])
+  @@index([orderId])
+  @@index([userId, status])
+  @@index([courseId, status])
+  @@index([accessExpiresAt])
+  @@map("learning_enrollments")
+}
+
+model LessonProgress {
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @db.Uuid
+  lessonId String @db.Uuid
+  status LessonProgressStatus @default(NOT_STARTED)
+  completionPercent Int @default(0)
+  timeSpentSeconds Int @default(0)
+  startedAt DateTime?
+  completedAt DateTime?
+  lastViewedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollment LearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  @@unique([enrollmentId, lessonId])
+  @@index([enrollmentId, status])
+  @@map("learning_lesson_progress")
+}
+
+model Assessment {
+  id String @id @default(uuid()) @db.Uuid
+  courseId String @db.Uuid
+  chapterId String? @db.Uuid
+  lessonId String? @db.Uuid
+  stage AssessmentStage
+  title String
+  description String? @db.Text
+  instructions String? @db.Text
+  passingScore Decimal @default(70) @db.Decimal(5, 2)
+  maxAttempts Int?
+  timeLimitSeconds Int?
+  retryCooldownSeconds Int @default(0)
+  shuffleQuestions Boolean @default(false)
+  shuffleOptions Boolean @default(false)
+  showExplanation Boolean @default(true)
+  allowReview Boolean @default(true)
+  isRequired Boolean @default(true)
+  isPublished Boolean @default(false)
+  displayOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter CourseChapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions AssessmentQuestion[]
+  attempts AssessmentAttempt[]
+  @@index([courseId, stage, isPublished])
+  @@index([chapterId, stage])
+  @@index([lessonId, stage])
+  @@map("learning_assessments")
+}
+
+model AssessmentQuestion {
+  id String @id @default(uuid()) @db.Uuid
+  assessmentId String @db.Uuid
+  type AssessmentQuestionType
+  prompt String @db.Text
+  explanation String? @db.Text
+  points Decimal @default(1) @db.Decimal(8, 2)
+  displayOrder Int @default(0)
+  isRequired Boolean @default(true)
+  correctAnswer Json?
+  acceptedAnswers String[] @default([])
+  requiresManualReview Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  options AssessmentOption[]
+  answers AssessmentAnswer[]
+  @@index([assessmentId, displayOrder])
+  @@map("learning_assessment_questions")
+}
+
+model AssessmentOption {
+  id String @id @default(uuid()) @db.Uuid
+  questionId String @db.Uuid
+  optionKey String
+  label String @db.Text
+  isCorrect Boolean @default(false)
+  displayOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  @@unique([questionId, optionKey])
+  @@index([questionId, displayOrder])
+  @@map("learning_assessment_options")
+}
+
+model AssessmentAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @db.Uuid
+  assessmentId String @db.Uuid
+  attemptNumber Int
+  status AssessmentAttemptStatus @default(IN_PROGRESS)
+  startedAt DateTime @default(now())
+  deadlineAt DateTime?
+  submittedAt DateTime?
+  gradedAt DateTime?
+  score Decimal? @db.Decimal(8, 2)
+  maxScore Decimal? @db.Decimal(8, 2)
+  passed Boolean?
+  pendingReview Boolean @default(false)
+  answerSnapshot Json?
+  questionOrder String[] @default([])
+  optionOrder Json?
+  feedback String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollment LearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  answers AssessmentAnswer[]
+  @@unique([enrollmentId, assessmentId, attemptNumber])
+  @@index([enrollmentId, assessmentId, status])
+  @@index([assessmentId, submittedAt])
+  @@map("learning_assessment_attempts")
+}
+
+model AssessmentAnswer {
+  id String @id @default(uuid()) @db.Uuid
+  attemptId String @db.Uuid
+  questionId String @db.Uuid
+  answer Json?
+  isCorrect Boolean?
+  pointsEarned Decimal @default(0) @db.Decimal(8, 2)
+  graderFeedback String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempt AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+  @@map("learning_assessment_answers")
+}
+
+model LearningGame {
+  id String @id @default(uuid()) @db.Uuid
+  courseId String @db.Uuid
+  chapterId String? @db.Uuid
+  lessonId String? @db.Uuid
+  type LearningGameType
+  title String
+  slug String
+  introduction String? @db.Text
+  instructions String @db.Text
+  config Json
+  scoringPolicy Json?
+  isRequired Boolean @default(false)
+  isPublished Boolean @default(false)
+  displayOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter CourseChapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  attempts LearningGameAttempt[]
+  @@unique([courseId, slug])
+  @@index([courseId, type, isPublished])
+  @@index([chapterId, displayOrder])
+  @@index([lessonId, displayOrder])
+  @@map("learning_games")
+}
+
+model LearningGameAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @db.Uuid
+  gameId String @db.Uuid
+  attemptNumber Int @default(1)
+  status LearningGameAttemptStatus @default(IN_PROGRESS)
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  answers Json?
+  score Decimal? @db.Decimal(8, 2)
+  maxScore Decimal? @db.Decimal(8, 2)
+  passed Boolean?
+  durationMs Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollment LearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  game LearningGame @relation(fields: [gameId], references: [id], onDelete: Restrict)
+  @@index([enrollmentId, gameId, status])
+  @@index([gameId, completedAt])
+  @@map("learning_game_attempts")
+}
+
+model LearningAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  courseId String @db.Uuid
+  chapterId String? @db.Uuid
+  lessonId String? @db.Uuid
+  title String
+  description String? @db.Text
+  instructions String @db.Text
+  maxScore Decimal @default(100) @db.Decimal(8, 2)
+  dueAfterDays Int?
+  allowLateSubmission Boolean @default(true)
+  isRequired Boolean @default(false)
+  isPublished Boolean @default(false)
+  displayOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter CourseChapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  submissions LearningAssignmentSubmission[]
+  @@index([courseId, isPublished])
+  @@index([chapterId, displayOrder])
+  @@index([lessonId, displayOrder])
+  @@map("learning_assignments")
+}
+
+model LearningAssignmentSubmission {
+  id String @id @default(uuid()) @db.Uuid
+  assignmentId String @db.Uuid
+  enrollmentId String @db.Uuid
+  submittedByUserId String @db.Uuid
+  status AssignmentSubmissionStatus @default(SUBMITTED)
+  responseText String? @db.Text
+  attachments Json?
+  submittedAt DateTime @default(now())
+  reviewedAt DateTime?
+  reviewedByUserId String? @db.Uuid
+  score Decimal? @db.Decimal(8, 2)
+  feedback String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assignment LearningAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  enrollment LearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  @@index([assignmentId, status])
+  @@index([enrollmentId, submittedAt])
+  @@index([reviewedByUserId])
+  @@map("learning_assignment_submissions")
+}
+
+model LearningCertificate {
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @unique @db.Uuid
+  certificateNumber String @unique
+  verificationCode String @unique
+  status CertificateStatus @default(DRAFT)
+  participantNameSnapshot String
+  courseTitleSnapshot String
+  issuerNameSnapshot String
+  issuedAt DateTime?
+  revokedAt DateTime?
+  revocationReason String? @db.Text
+  pdfStorageKey String?
+  verificationUrl String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollment LearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  @@index([status, issuedAt])
+  @@map("learning_certificates")
+}
