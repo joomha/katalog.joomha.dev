@@ -3,8 +3,10 @@ import { listNotificationsForUser } from "@/modules/platform";
 import { NotificationActions } from "@/modules/platform/notification-actions";
 import { NotificationPreferences } from "@/modules/platform/notification-preferences";
 import Link from "next/link";
+import { requireUser } from "@/modules/identity/guards";
 export const metadata:Metadata={title:"Notifikasi Saya"};
 export default async function MyNotificationsPage(){
+ await requireUser();
  const {items,unreadCount}=await listNotificationsForUser({limit:50});
  return <div className="space-y-6">
   <section className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-xl font-semibold">Notifikasi Saya</h1><p className="mt-1 text-sm text-muted-foreground">{unreadCount} notifikasi belum dibaca.</p></div><NotificationActions unreadCount={unreadCount}/></section>
