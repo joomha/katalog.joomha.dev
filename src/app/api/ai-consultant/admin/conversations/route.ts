@@ -21,7 +21,13 @@ export async function GET() {
       orderBy: { lastMessageAt: "desc" },
       take: 100,
     });
-    return NextResponse.json({ conversations });
+    const safeConversations = conversations.map((conversation) => ({
+      ...conversation,
+      lead: conversation.consentScope.includes("CONTACT_DETAILS") ? conversation.lead : null,
+      summary: conversation.consentScope.includes("CONSULTATION_SUMMARY") ? conversation.summary : null,
+      messages: conversation.consentScope.includes("TRANSCRIPT") ? conversation.messages : [],
+    }));
+    return NextResponse.json({ conversations: safeConversations });
   } catch {
     return NextResponse.json({ error: "Akses admin/instruktur diperlukan." }, { status: 403 });
   }
