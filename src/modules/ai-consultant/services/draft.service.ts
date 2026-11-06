@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 
@@ -20,11 +21,13 @@ export async function createConsultationDraft(input: unknown, userId?: string) {
     throw new Error("Percakapan tidak ditemukan atau akses ditolak.");
   }
   if (conversation.status !== "AI_CONSULTATION") throw new Error("Percakapan tidak lagi menerima draft AI.");
+  const safeDetails = JSON.parse(JSON.stringify(data.details)) as Prisma.InputJsonValue;
+  const payload = { status: "DRAFT", details: safeDetails, consentAt: new Date().toISOString() } as Prisma.InputJsonObject;
   const lead = await prisma.consultationLead.upsert({
     where: { conversationId: conversation.id },
     create: {
       conversationId: conversation.id, userId: conversation.userId, mode: data.mode,
-      payload: { status: "DRAFT", details: data.details, consentAt: new Date().toISOString() },
+      payload,
     },
     update: {
       mode: data.mode,
