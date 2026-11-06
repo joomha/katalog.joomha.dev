@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
+import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 type Values={brandDisplayName:string;supportContact:string;timezone:string;maintenanceBanner:string;maxUploadBytes:number};
 export function SettingsEditor({initial,editable}:{initial:Values;editable:boolean}){
  const [values,setValues]=useState(initial),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
- async function save(event:React.FormEvent<HTMLFormElement>){
+ async function save(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setBusy(true);setMessage("");
   try{
    const entries=Object.entries(values) as [keyof Values,Values[keyof Values]][];
@@ -16,7 +17,7 @@ export function SettingsEditor({initial,editable}:{initial:Values;editable:boole
   }catch(error){setMessage(error instanceof Error?error.message:"Terjadi kesalahan.");}
   finally{setBusy(false);}
  }
- const field=(key:keyof Values,label:string,type="text")=><label className="block space-y-1"><span className="text-sm font-medium">{label}</span><input type={type} disabled={!editable||busy} value={String(values[key])} onChange={event=>setValues(current=>({...current,[key]:type==="number"?Number(event.target.value):event.target.value}))} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"/></label>;
+ const field=(key:keyof Values,label:string,type="text")=><label className="block space-y-1"><span className="text-sm font-medium">{label}</span><input type={type} disabled={!editable||busy} value={String(values[key])} onChange={event=>{const value=type==="number"?Number(event.target.value):event.target.value;setValues(current=>({...current,[key]:value} as Values));}} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"/></label>;
  return <form onSubmit={save} className="space-y-4 rounded-lg border bg-card p-5">
   <div><h2 className="font-semibold">Pengaturan non-secret</h2><p className="mt-1 text-xs text-muted-foreground">Secret dan API key tidak dapat disimpan melalui menu ini.</p></div>
   <div className="grid gap-4 sm:grid-cols-2">{field("brandDisplayName","Nama brand")}{field("supportContact","Kontak dukungan")}{field("timezone","Zona waktu")}{field("maxUploadBytes","Batas upload (byte)","number")}</div>
