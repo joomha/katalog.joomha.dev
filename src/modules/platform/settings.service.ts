@@ -16,6 +16,10 @@ export type SystemSettingKey=keyof typeof SCHEMAS;
 export interface PublicSystemSettings {brandDisplayName:string;supportContact:string;currency:"IDR";timezone:string;maintenanceBanner:string}
 const DEFAULTS={brandDisplayName:"Joomha Education",supportContact:"",currency:"IDR" as const,timezone:"Asia/Jakarta",maintenanceBanner:"",maxUploadBytes:10*1024*1024};
 const PUBLIC_KEYS:readonly SystemSettingKey[]=["brandDisplayName","supportContact","currency","timezone","maintenanceBanner"];
+export function parseSystemSettingValue(key:string,value:unknown){
+ if(!Object.prototype.hasOwnProperty.call(SCHEMAS,key))throw new Error("System setting key is not allowlisted");
+ return SCHEMAS[key as SystemSettingKey].parse(value);
+}
 export async function getPublicSystemSettings():Promise<PublicSystemSettings>{
  const rows=await prisma.systemSetting.findMany({where:{key:{in:[...PUBLIC_KEYS]},isPublic:true}});
  const v:Record<string,unknown>={...DEFAULTS};for(const row of rows)v[row.key]=row.value;
@@ -28,7 +32,7 @@ export async function getAdminSystemSettings(){
  return v as typeof DEFAULTS;
 }
 export async function updateSystemSetting<K extends SystemSettingKey>(key:K,value:z.infer<(typeof SCHEMAS)[K]>){
- const actor=await assertPermission(PERMISSIONS.PLATFORM_MANAGE),parsed=SCHEMAS[key].parse(value),isPublic=PUBLIC_KEYS.includes(key);
+ const actor=await assertPermission(PERMISSIONS.PLATFORM_MANAGE),parsed=parseSystemSettingValue(key,value),isPublic=PUBLIC_KEYS.includes(key);
  const saved=await prisma.systemSetting.upsert({where:{key},create:{key,value:parsed,isPublic,updatedBy:actor.id},update:{value:parsed,isPublic,updatedBy:actor.id}});
  await writeAuditLog({actorId:actor.id,action:"platform.setting.updated",targetType:"SystemSetting",targetId:key,metadata:{key}});
  return saved;
