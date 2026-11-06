@@ -16,6 +16,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!conversation || ["CLOSED", "CANCELLED"].includes(conversation.status)) {
       return NextResponse.json({ error: "Percakapan tidak ditemukan atau sudah ditutup." }, { status: 404 });
     }
+    if (admin.roles.includes("INSTRUCTOR") && !admin.roles.includes("ADMIN") &&
+        !admin.roles.includes("SUPERADMIN") && conversation.assignedUserId !== admin.id) {
+      return NextResponse.json({ error: "Instruktur hanya dapat membalas konsultasi yang ditugaskan kepadanya." }, { status: 403 });
+    }
     const message = await prisma.consultationMessage.create({
       data: { conversationId: id, role: "ADMIN", content: parsed.data.message, metadata: { senderUserId: admin.id } },
     });
@@ -25,6 +29,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ messageId: message.id, status: "HUMAN_ASSIGNED" }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Balasan admin gagal dikirim.";
-    return NextResponse.json({ error: message }, { status: message.includes("akses") ? 403 : 401 });
+    return NextResponse.json({ error: message }, { status: message.toLowerCase().includes("akses") ? 403 : 401 });
   }
 }
