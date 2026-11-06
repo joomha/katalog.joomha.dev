@@ -136,7 +136,7 @@ model KnowledgeChunk {
   chunkIndex     Int      @map("chunk_index")
   content        String   @db.Text
   tokenEstimate  Int?
-  embedding      Unsupported("vector(1536)")?
+  embedding      Unsupported("vector")?
   metadata       Json?
   createdAt      DateTime @default(now()) @map("created_at")
   document       KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
