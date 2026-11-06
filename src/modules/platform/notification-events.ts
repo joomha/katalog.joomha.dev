@@ -3,7 +3,7 @@ import type { NotificationCategory } from "@prisma/client";
 import { createNotificationFromSystemEvent } from "./notification.service";
 export interface PlatformDomainEvent {eventId:string;eventName:string;payload:Record<string,unknown>}
 interface Template {category:NotificationCategory;title:string;body:string;resourceUrl:string}
-const TEMPLATES:Record<string,Template>={
+const USER_ID_PATTERN=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\nconst TEMPLATES:Record<string,Template>={
  "OrderPaid":{category:"TRANSACTIONAL",title:"Pembayaran berhasil",body:"Pembayaran Anda telah diverifikasi. Detail pesanan tersedia di akun Joomha.",resourceUrl:"/akun/pesanan"},
  "OrderCancelled":{category:"TRANSACTIONAL",title:"Pesanan dibatalkan",body:"Pesanan Anda telah dibatalkan. Periksa akun untuk melihat informasi lebih lanjut.",resourceUrl:"/akun/pesanan"},
  "EnrollmentCreated":{category:"LEARNING",title:"Kelas sudah tersedia",body:"Pendaftaran kelas Anda berhasil. Silakan buka area pembelajaran untuk mulai belajar.",resourceUrl:"/belajar"},
@@ -19,8 +19,8 @@ const TEMPLATES:Record<string,Template>={
 export async function handlePlatformDomainEvent(event:PlatformDomainEvent){
  const template=TEMPLATES[event.eventName];
  const recipients=Array.isArray(event.payload.recipientUserIds)
-  ? event.payload.recipientUserIds.filter((value):value is string=>typeof value==="string")
-  : typeof event.payload.userId==="string"?[event.payload.userId]:[];
+  ? event.payload.recipientUserIds.filter((value):value is string=>typeof value==="string"&&USER_ID_PATTERN.test(value))
+  : typeof event.payload.userId==="string"&&USER_ID_PATTERN.test(event.payload.userId)?[event.payload.userId]:[];
  if(!template||!event.eventId||recipients.length===0)return {handled:false,created:0};
  const uniqueRecipients=[...new Set(recipients)];
  for(const userId of uniqueRecipients){
