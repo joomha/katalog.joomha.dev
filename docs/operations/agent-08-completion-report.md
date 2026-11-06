@@ -58,7 +58,7 @@ No secret/API key was added to source files or commits.
 
 ## Schema / API contracts
 - Added ConsultationConversation, ConsultationMessage, ConsultationLead, ConsultationSummary, KnowledgeDocument, and KnowledgeChunk.
-- KnowledgeChunk uses Unsupported("vector(1536)") and raw parameterized pgvector operations. Agent 10 must enable the vector extension and generate migration.
+- KnowledgeChunk uses Unsupported("vector") and raw parameterized pgvector operations. Agent 10 must select/fix the production dimension, enable the vector extension, and generate migration after the embedding provider decision.
 - Chat endpoint accepts conversationId or guestSessionId, mode, and message.
 - Draft and handoff APIs require consent=true from a customer-originated request; model-generated tool arguments cannot grant consent.
 - Admin endpoints are role-gated; instructor access is limited to assigned conversations.
