@@ -17,7 +17,8 @@ export async function createNotification(input:CreateNotificationInput){
    : await prisma.notification.create({data});
  }
  if(input.email&&pref?.emailEnabled!==false){
-  const result=await sendEmailWithRetry({to:input.email.to,subject:input.email.subject.trim().slice(0,120),text:input.email.text.trim().slice(0,500)});
+  // Keep transactional email generic: no order details, personal data, or private content.
+  const result=await sendEmailWithRetry({to:input.email.to,subject:"Pemberitahuan Joomha Education",text:"Anda memiliki pemberitahuan baru di akun Joomha Education. Silakan masuk ke akun Anda untuk melihat detailnya."});
   if(!result.ok)console.error("[platform:email-failed]",{userId:input.userId,category:input.category,errorCode:result.errorCode});
  }
  return notification;
