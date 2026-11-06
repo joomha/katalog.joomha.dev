@@ -23,12 +23,16 @@ export async function retrieveKnowledge(
   const vectorLiteral = `[${vector.join(",")}]`;
   const limit = Math.min(Math.max(options.limit ?? 5, 1), 10);
   const roles = options.roles ?? [];
+  const roleFilter = roles.length
+    ? Prisma.sql`cardinality(kd.allowed_roles) = 0 OR kd.allowed_roles && ARRAY[${Prisma.join(roles)}]::text[]`
+    : Prisma.sql`cardinality(kd.allowed_roles) = 0`;
   return prisma.$queryRaw<RetrievedKnowledge[]>(Prisma.sql`
     SELECT kc.id AS "chunkId", kd.id AS "documentId", kd.title,
            kc.content, (kc.embedding <=> ${vectorLiteral}::vector) AS distance
     FROM knowledge_chunks kc
     INNER JOIN knowledge_documents kd ON kd.id = kc.document_id
     WHERE kd.status = 'INDEXED'
+      AND (${roleFilter})
       AND (
         kd.visibility = 'PUBLIC'
         OR (kd.visibility = 'CUSTOMER' AND ${roles.includes("CUSTOMER")})
