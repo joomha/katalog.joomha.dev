@@ -1,5 +1,213 @@
 // ==============================================================================
 // COMMERCE DOMAIN SCHEMA (Owned by Agent 04)
-// Cart, CartItem, Order, OrderItem, PaymentTransaction, Entitlement
+// Cart, CartItem, Order, OrderItem, Payment, PaymentEvent, Refund, DigitalEntitlement
 // ==============================================================================
 
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum OrderSourceType {
+  CATALOG
+  TUTORING_QUOTE
+  BUSINESS_PROPOSAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  REJECTED
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?
+  sessionId String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+
+  @@index([userId])
+  @@map("commerce_carts")
+}
+
+model CartItem {
+  id            String   @id @default(cuid())
+  cartId        String
+  cart          Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  catalogItemId String
+  title         String
+  slug          String
+  itemType      String
+  unitPrice     Decimal  @db.Decimal(12, 2)
+  quantity      Int      @default(1)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([cartId, catalogItemId])
+  @@index([cartId])
+  @@index([catalogItemId])
+  @@map("commerce_cart_items")
+}
+
+model Order {
+  id                String               @id @default(cuid())
+  orderNumber       String               @unique
+  userId            String?
+  customerName      String
+  customerEmail     String
+  customerPhone     String?
+  status            OrderStatus          @default(PENDING)
+  currency          String               @default("IDR")
+  subtotal          Decimal              @db.Decimal(12, 2)
+  discountAmount    Decimal              @default(0) @db.Decimal(12, 2)
+  taxAmount         Decimal              @default(0) @db.Decimal(12, 2)
+  totalAmount       Decimal              @db.Decimal(12, 2)
+  notes             String?
+  idempotencyKey    String?              @unique
+  sourceType        OrderSourceType      @default(CATALOG)
+  sourceReferenceId String?
+  metadata          Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  items             OrderItem[]
+  payments          Payment[]
+  refunds           Refund[]
+  entitlements      DigitalEntitlement[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([customerEmail])
+  @@index([sourceReferenceId])
+  @@map("commerce_orders")
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  catalogItemId  String?
+  title          String
+  slug           String?
+  sku            String?
+  itemType       String
+  unitPrice      Decimal  @db.Decimal(12, 2)
+  quantity       Int      @default(1)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  totalPrice     Decimal  @db.Decimal(12, 2)
+  currency       String   @default("IDR")
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([orderId])
+  @@index([catalogItemId])
+  @@map("commerce_order_items")
+}
+
+model Payment {
+  id                     String         @id @default(cuid())
+  orderId                String
+  order                  Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  paymentNumber          String         @unique
+  provider               String         @default("mock")
+  providerTransactionId  String?
+  paymentMethod          String?
+  status                 PaymentStatus  @default(PENDING)
+  amount                 Decimal        @db.Decimal(12, 2)
+  currency               String         @default("IDR")
+  checkoutUrl            String?
+  rawResponse            Json?
+  paidAt                 DateTime?
+  expiredAt              DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  events                 PaymentEvent[]
+  refunds                Refund[]
+
+  @@index([orderId])
+  @@index([provider, providerTransactionId])
+  @@index([status])
+  @@map("commerce_payments")
+}
+
+model PaymentEvent {
+  id              String   @id @default(cuid())
+  paymentId       String?
+  payment         Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  orderId         String?
+  provider        String
+  providerEventId String?
+  eventType       String
+  payload         Json
+  isProcessed     Boolean  @default(false)
+  processingNotes String?
+  receivedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@unique([provider, providerEventId])
+  @@index([paymentId])
+  @@index([orderId])
+  @@index([eventType])
+  @@map("commerce_payment_events")
+}
+
+model Refund {
+  id               String       @id @default(cuid())
+  orderId          String
+  order            Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  paymentId        String?
+  payment          Payment?     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refundNumber     String       @unique
+  amount           Decimal      @db.Decimal(12, 2)
+  currency         String       @default("IDR")
+  reason           String
+  status           RefundStatus @default(PENDING)
+  providerRefundId String?
+  approvedByUserId String?
+  processedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([orderId])
+  @@index([paymentId])
+  @@map("commerce_refunds")
+}
+
+model DigitalEntitlement {
+  id               String    @id @default(cuid())
+  orderId          String
+  order            Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  userId           String
+  catalogItemId    String
+  itemTitle        String
+  assetDownloadUrl String?
+  isRevoked        Boolean   @default(false)
+  revokedAt        DateTime?
+  revokedReason    String?
+  grantedAt        DateTime  @default(now())
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([userId, catalogItemId])
+  @@index([userId])
+  @@index([orderId])
+  @@index([catalogItemId])
+  @@map("commerce_digital_entitlements")
+}
