@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { assertPermission } from "@/modules/identity/guards";
+import { assertAuthenticated, assertPermission } from "@/modules/identity/guards";
 import { PERMISSIONS } from "@/modules/identity/permissions";
 import type { WriteAuditLogInput } from "./types";
 const SENSITIVE=/(password|secret|token|authorization|cookie|api.?key|card|cvv|email|phone|address)/i;
@@ -13,7 +13,10 @@ function sanitize(v:unknown,d=0):unknown{
  return String(v).slice(0,100);
 }
 export async function writeAuditLog(input:WriteAuditLogInput){
- if(input.actorId)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ if(input.actorId){
+  const actor=await assertAuthenticated();
+  if(actor.id!==input.actorId)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
+ }
  const action=input.action.trim().slice(0,120),targetType=input.targetType.trim().slice(0,100);
  if(!action||!targetType)throw new Error("Audit action and targetType are required");
  return prisma.auditLog.create({data:{
