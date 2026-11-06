@@ -72,7 +72,7 @@ export async function getEnrolledCoursePlayer(slug: string) {
             codeLanguage: block.codeLanguage, displayOrder: block.displayOrder,
             isCompleted: block.contentProgress.some((row) => row.completedAt !== null),
           })) : [],
-          assessments: lessonsGate.allowed ? lesson.assessments : [], games: lessonsGate.allowed && lesson.progress[0]?.status === "COMPLETED" ? lesson.games : [], assignments: lessonsGate.allowed ? lesson.assignments : [],
+          assessments: lessonGate.allowed ? lesson.assessments : [], games: lessonGate.allowed && lesson.progress[0]?.status === "COMPLETED" ? lesson.games : [], assignments: lessonGate.allowed ? lesson.assignments : [],
         })),
       };
     }),
