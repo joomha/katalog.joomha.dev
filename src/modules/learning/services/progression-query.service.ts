@@ -24,7 +24,9 @@ export async function loadChapterGateStates(courseId: string, enrollmentId: stri
   });
   return chapters.map((chapter) => {
     const policy = (chapter.gatePolicy ?? {}) as {
-      pretestRequiredBeforeLessons?: boolean; requireAllLessonsCompleted?: boolean; requireChapterExamPassed?: boolean;
+      pretestRequiredBeforeLessons?: boolean;
+      requireAllLessonsCompleted?: boolean;
+      requireChapterExamPassed?: boolean;
     };
     const pretests = chapter.assessments.filter((row) => row.stage === "PRETEST");
     const exams = chapter.assessments.filter((row) => row.stage === "CHAPTER_EXAM");
@@ -51,7 +53,7 @@ export async function loadChapterGateStates(courseId: string, enrollmentId: stri
 export async function getActiveEnrollmentForCourse(courseId: string, userId: string) {
   return prisma.learningEnrollment.findFirst({
     where: {
-      courseId, userId, status: "ACTIVE", accessStartsAt: { lte: new Date() },
+      courseId, userId, status: { in: ["ACTIVE", "COMPLETED"] }, accessStartsAt: { lte: new Date() },
       OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: new Date() } }],
     },
   });
