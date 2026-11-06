@@ -14,6 +14,7 @@ export const consultationMessageSchema = z.object({
 
 export const handoffConsentSchema = z.object({
   conversationId: z.string().uuid(),
+  guestSessionId: z.string().min(16).max(128).optional(),
   consent: z.literal(true),
   consentScope: z.array(z.enum(["TRANSCRIPT", "CONTACT_DETAILS", "CONSULTATION_SUMMARY"])).min(1),
   customerName: z.string().trim().max(120).optional(),
