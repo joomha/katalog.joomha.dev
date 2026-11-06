@@ -38,6 +38,6 @@ export async function getAdminSystemSettings(){
 export async function updateSystemSetting<K extends SystemSettingKey>(key:K,value:z.infer<(typeof SCHEMAS)[K]>){
  const actor=await assertPermission(PERMISSIONS.PLATFORM_MANAGE),parsed=parseSystemSettingValue(key,value),isPublic=PUBLIC_KEYS.includes(key);
  const saved=await prisma.systemSetting.upsert({where:{key},create:{key,value:parsed,isPublic,updatedBy:actor.id},update:{value:parsed,isPublic,updatedBy:actor.id}});
- await writeAuditLog({actorId:actor.id,action:"platform.setting.updated",targetType:"SystemSetting",targetId:key,metadata:{key}});
+ try{await writeAuditLog({actorId:actor.id,action:"platform.setting.updated",targetType:"SystemSetting",targetId:key,metadata:{key}});}\n catch(error){console.error("[platform:audit-write-failed]",{action:"platform.setting.updated",targetId:key,errorCode:error instanceof Error?error.name:"UNKNOWN"});}
  return saved;
 }

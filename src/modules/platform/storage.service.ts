@@ -26,7 +26,7 @@ function normalizeName(name:string){
  if(!extension||!EXTENSION_MIME[extension])throw new Error("File extension is not allowed");
  return {name:base,extension};
 }
-export async function uploadStoredFile(input:UploadStoredFileInput){
+async function recordAuditSafely(input:Parameters<typeof writeAuditLog>[0]){\n try{await writeAuditLog(input);}catch(error){console.error("[platform:audit-write-failed]",{action:input.action,targetId:input.targetId,errorCode:error instanceof Error?error.name:"UNKNOWN"});}\n}\nexport async function uploadStoredFile(input:UploadStoredFileInput){
  const actor=await assertAuthenticated();
  if(input.ownerId&&input.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  if(input.visibility==="PUBLIC"&&!actor.roles.includes("SUPERADMIN"))await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
@@ -36,7 +36,7 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
  if(input.bytes.byteLength===0||input.bytes.byteLength>max)throw new Error("File size is outside the allowed range");
  const checksum=createHash("sha256").update(input.bytes).digest("hex"),key=checksum.slice(0,2)+"/"+randomUUID()+"."+extension;
  const adapter=getStorageAdapter();await adapter.put({key,bytes:input.bytes,contentType:mime});
- let stored;
+ let stored:Awaited<ReturnType<typeof prisma.storedFile.create>>;
  try{
   stored=await prisma.storedFile.create({data:{ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as Prisma.InputJsonObject):undefined}});
  }catch(error){await adapter.delete(key);throw error;}
@@ -74,7 +74,7 @@ export async function deleteStoredFile(fileId:string){
  if(file.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  await getStorageAdapter().delete(file.storageKey);
  await prisma.storedFile.update({where:{id:file.id},data:{status:"DELETED",deletedAt:new Date()}});
- await writeAuditLog({actorId:actor.id,action:"platform.file.deleted",targetType:"StoredFile",targetId:file.id});
+ await recordAuditSafely({actorId:actor.id,action:"platform.file.deleted",targetType:"StoredFile",targetId:file.id});
  return {deleted:true};
 }
 export async function archiveStoredFile(fileId:string){
@@ -82,6 +82,6 @@ export async function archiveStoredFile(fileId:string){
  if(!file)return {archived:false};
  if(file.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  await prisma.storedFile.update({where:{id:file.id},data:{status:"ARCHIVED",archivedAt:new Date()}});
- await writeAuditLog({actorId:actor.id,action:"platform.file.archived",targetType:"StoredFile",targetId:file.id});
+ await recordAuditSafely({actorId:actor.id,action:"platform.file.archived",targetType:"StoredFile",targetId:file.id});
  return {archived:true};
 }
