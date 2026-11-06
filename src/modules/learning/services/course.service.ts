@@ -154,6 +154,9 @@ export async function publishCourse(courseId: string) {
   if (!chapters.length) throw new Error("Course memerlukan minimal satu chapter wajib.");
   for (const chapter of chapters) {
     if (!chapter.isPublished || !chapter.lessons.length) throw new Error("Setiap chapter wajib dan lesson-nya harus diterbitkan.");
+    if (chapter.lessons.some((lesson) => !lesson.isPublished)) {
+      throw new Error("Semua lesson wajib dalam chapter harus diterbitkan sebelum course.");
+    }
     const gatePolicy = (chapter.gatePolicy ?? {}) as { requireChapterExamPassed?: boolean };
     const chapterExam = chapter.assessments.some((assessment) => assessment.stage === "CHAPTER_EXAM");
     const pretest = chapter.assessments.some((assessment) => assessment.stage === "PRETEST");
@@ -167,7 +170,13 @@ export async function publishCourse(courseId: string) {
       throw new Error("Setiap lesson wajib memiliki minimal satu content block wajib.");
     }
   }
-  const policy = (course.certificatePolicy ?? {}) as { finalExamRequired?: boolean };
+  const certificatePolicy = (course.certificatePolicy ?? {}) as { finalExamRequired?: boolean; requiredAssignments?: boolean };
+  if (certificatePolicy.requiredAssignments) {
+    const assignmentCount = await prisma.learningAssignment.count({
+      where: { courseId, isPublished: true, isRequired: true },
+    });
+    if (assignmentCount === 0) throw new Error("Course mewajibkan assignment untuk sertifikat tetapi belum memiliki assignment wajib yang diterbitkan.");
+  }
   if (course.certificateEnabled && (policy.finalExamRequired ?? true)) {
     const count = await prisma.assessment.count({ where: { courseId, stage: "FINAL_EXAM", isPublished: true, isRequired: true } });
     if (!count) throw new Error("Course dengan sertifikat wajib memiliki final exam.");
