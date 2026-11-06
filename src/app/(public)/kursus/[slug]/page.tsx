@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublishedCourseBySlug } from "@/modules/learning/services";
+import { enrollOpenCourseAction } from "@/modules/learning/actions";
 
 type PageProps = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -25,7 +26,11 @@ export default async function CourseOverviewPage({ params }: PageProps) {
         <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">{course.title}</h1>
         <p className="mt-4 max-w-3xl leading-7 text-muted-foreground">{course.description}</p>
         {course.enrollmentMode === "OPEN" ? (
-          <Link href={"/masuk?callbackUrl=" + encodeURIComponent("/akun/pembelajaran/" + course.slug)} className="mt-7 inline-flex rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Masuk untuk mulai belajar</Link>
+          <form action={enrollOpenCourseAction} className="mt-7">
+            <input type="hidden" name="courseId" value={course.id} />
+            <input type="hidden" name="slug" value={course.slug} />
+            <button className="rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Daftar dan mulai belajar</button>
+          </form>
         ) : (
           <div className="mt-7 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             {course.catalogStatus === "AVAILABLE"
