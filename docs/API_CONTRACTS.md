@@ -147,6 +147,9 @@ driver SMTP (saat ini `MAIL_DRIVER=console` mencetak tautan ke log server).
 - Event handler tepercaya menerima `userId` atau `recipientUserIds: string[]`; dedupe key per event dan penerima.
 - Event dipetakan: `OrderPaid`, `OrderCancelled`, `CourseCompleted`, `CertificateIssued`, `TutoringQuoteAwaitingReview`, `QuoteApprovedByInstructor`, `TutoringSessionScheduled`, `ConsultationHandedOff`, `BusinessProposalApproved`, `ProjectMilestoneUpdated`; `EnrollmentCreated` juga didukung.
 
+### Schema integration note
+- Field `userId`, `ownerId`, `actorId`, dan `updatedBy` disimpan sebagai scalar UUID di schema platform pada branch ini agar tidak mengubah file identity milik Agent 02. Konfirmasi relasi/FK dan inverse fields bersama Agent 02 sebelum Agent 10 membuat migration.
+
 ### Storage
 - `uploadStoredFile(input)`: wajib login; menyimpan metadata di `StoredFile`, random storage key, SHA-256, allowlist extension/MIME, pemeriksaan signature konten, dan menerapkan `maxUploadBytes` dari SystemSetting.
 - `getStoredFileMetadata(fileId, authorizeEntitlement?)` dan `getAuthorizedFileAccess(fileId, authorizeEntitlement?)`: public file dapat diakses tanpa login; private file harus dimiliki user, pemegang `platform.manage`, atau lolos callback entitlement. Metadata yang dikembalikan tidak mengekspos storage key.

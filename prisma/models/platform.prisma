@@ -1,4 +1,5 @@
-// Shared platform services. Cross-domain User references are scalar UUIDs by contract.
+// Shared platform services. User IDs remain scalar UUIDs here to respect identity schema ownership;
+// add inverse User relation fields with Agent 02 before final migration if FK relations are required.
 enum NotificationCategory {
   TRANSACTIONAL
   LEARNING
