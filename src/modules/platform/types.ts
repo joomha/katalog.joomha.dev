@@ -3,7 +3,6 @@ export type { NotificationCategory, StoredFileVisibility };
 export interface CreateNotificationInput {
  userId:string; category:NotificationCategory; title:string; body:string;
  resourceUrl?:string; eventName?:string; dedupeKey?:string;
- email?:{to:string;subject:string;text:string};
 }
 export interface NotificationListOptions { limit?:number; unreadOnly?:boolean; cursor?:string }
 export interface WriteAuditLogInput {
