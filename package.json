@@ -18,15 +18,19 @@
     "db:generate": "prisma generate --schema=prisma --allow-no-models",
     "db:migrate:dev": "prisma migrate dev --schema=prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema=prisma",
-    "db:seed": "node -e \"console.log('Seed runner will be orchestrated by Agent 10')\""
+    "db:seed": "node -e \"console.log('Seed runner will be orchestrated by Agent 10')\"",
+    "identity:create-superadmin": "node src/modules/identity/cli/create-superadmin.mjs"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "2.11.3",
+    "@node-rs/argon2": "2.2.2",
     "@prisma/client": "6.4.1",
     "@radix-ui/react-slot": "^1.5.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "0.475.0",
     "next": "15.2.1",
+    "next-auth": "5.0.0-beta.32",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "tailwind-merge": "3.0.2",

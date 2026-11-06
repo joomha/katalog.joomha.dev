@@ -1,5 +1,297 @@
 // ==============================================================================
 // IDENTITY DOMAIN SCHEMA (Owned by Agent 02)
-// User, Role, Session, Account, InstructorProfile
+// User, RBAC (Role/Permission), Auth.js adapter models, instructor/student
+// profiles, structured addresses, password reset, auth attempts.
+//
+// Konvensi:
+// - ID utama: UUID (client-generated uuid v4, tipe kolom Postgres uuid).
+// - Semua tabel memakai @@map snake_case.
+// - Domain lain TIDAK menambahkan @relation ke model di file ini; gunakan
+//   kolom `userId String @db.Uuid` + index pada file schema domain masing-
+//   masing dan resolve join di application layer (lihat docs/API_CONTRACTS.md).
+// - Migration dimiliki Agent 10; file ini hanya definisi schema.
 // ==============================================================================
 
+/// Role pengguna minimum sesuai kontrak SHARED_CONTEXT.
+/// GUEST tidak memiliki record role (tidak login).
+enum RoleType {
+  CUSTOMER
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+  SUPERADMIN
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  email        String    @unique
+  /// Null untuk akun OAuth-only (provider belum dikonfigurasi di fase awal).
+  passwordHash String?
+  /// Timestamp verifikasi email; null = belum terverifikasi.
+  /// Status ini jujur ditampilkan ke pengguna dan dapat diaktifkan lewat env
+  /// AUTH_REQUIRE_EMAIL_VERIFICATION (default: false) — lihat docs/API_CONTRACTS.md.
+  emailVerified DateTime?
+  /// Nomor telepon opsional (E.164 direkomendasikan).
+  phone        String?
+  avatarUrl    String?
+  /// Akun dinonaktifkan admin: tidak bisa login, session JWT ditolak guard.
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  /// Preferensi zona waktu pengguna (IANA name, mis. Asia/Jakarta).
+  timezone     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  verificationTokens  VerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+  authAttempts        AuthAttempt[]
+  roles               UserRole[]
+  permissionGrants    UserPermission[]
+  instructorProfile   InstructorProfile?
+  studentProfile      StudentProfile?
+  addresses           UserAddress[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------------------------
+// Model adapter Auth.js (@auth/prisma-adapter) — kompatibel dengan strategy
+// JWT untuk credentials, siap dipakai bila OAuth provider dikonfigurasi.
+// ------------------------------------------------------------------------------
+
+model Account {
+  userId                    String  @db.Uuid
+  type                      String
+  provider                  String
+  providerAccountId         String
+  refresh_token             String?
+  refresh_token_expires_in  Int?
+  access_token              String?
+  expires_at                Int?
+  token_type                String?
+  scope                     String?
+  id_token                  String?
+  session_state             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+/// Session database (dipakai bila strategy session diganti ke "database").
+/// Dengan strategy JWT, tabel ini tidak aktif tetapi tetap disediakan agar
+/// pergantian strategy tidak memerlukan perombakan schema.
+model Session {
+  sessionToken String   @id
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// Token verifikasi email standar Auth.js (hash token, bukan token mentah).
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  /// Relasi opsional untuk audit; adapter tidak mengisi field ini.
+  userId     String?  @db.Uuid
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ------------------------------------------------------------------------------
+// Password reset — token sekali pakai, hanya hash yang disimpan.
+// ------------------------------------------------------------------------------
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// SHA-256 hash dari token mentah yang dikirim via email adapter.
+  tokenHash String    @unique
+  expiresAt DateTime
+  /// Terisi ketika token sudah dipakai (sekali pakai).
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ------------------------------------------------------------------------------
+// Audit percobaan autentikasi — dasar brute-force protection lintas instance.
+// ------------------------------------------------------------------------------
+
+model AuthAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  ip        String?
+  success   Boolean
+  userAgent String?
+  userId    String?  @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("auth_attempts")
+}
+
+// ------------------------------------------------------------------------------
+// RBAC — role multi per user, katalog permission granular, default per role,
+// override per role (DB), dan grant tambahan per user.
+// ------------------------------------------------------------------------------
+
+/// Katalog permission. Key stabil, snake-case, pola "<domain>.<aksi>".
+model Permission {
+  key         String @id
+  description String
+
+  rolePermissions RolePermission[]
+  userGrants     UserPermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId     String
+  role       RoleType
+  assignedAt DateTime @default(now())
+  /// Admin/superadmin yang menetapkan role; null = role otomatis sistem.
+  assignedBy String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+/// Override permission default untuk sebuah role (mis. menonaktifkan akses
+/// katalog untuk ADMIN yang bertanggung jawab order).
+model RolePermission {
+  role          RoleType
+  permissionKey String
+  granted       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@unique([role, permissionKey])
+  @@map("role_permissions")
+}
+
+/// Grant permission tambahan individual (exception-based RBAC).
+/// Hanya mendukung grant positif; penolakan tidak didukung agar mudah diaudit.
+model UserPermission {
+  userId        String
+  permissionKey String
+  grantedAt     DateTime @default(now())
+  grantedBy     String?  @db.Uuid
+  reason        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@unique([userId, permissionKey])
+  @@index([userId])
+  @@map("user_permissions")
+}
+
+// ------------------------------------------------------------------------------
+// Profile domain
+// ------------------------------------------------------------------------------
+
+/// Profil instruktur (tim internal Joomha). Assignment kursus/sesi dimiliki
+/// modul learning/tutoring melalui userId.
+model InstructorProfile {
+  id              String  @id @default(uuid()) @db.Uuid
+  userId          String  @unique @db.Uuid
+  headline        String?
+  bio             String?
+  /// Bidang keahlian, mis. ["Microsoft Excel", "Python"].
+  specializations String[]
+  /// Dapat menerima penugasan baru.
+  isActive        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("instructor_profiles")
+}
+
+/// Profil murid — opsional; satu User tetap satu akun.
+model StudentProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  educationLevel String?
+  learningGoals  String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profiles")
+}
+
+/// Alamat terstruktur untuk layanan offline/service (les offline, jasa
+/// on-site). Hanya dipakai atas consent eksplisit pengguna.
+model UserAddress {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  label         String
+  recipientName String?
+  phone         String?
+  province      String?
+  city          String?
+  district      String?
+  postalCode    String?
+  fullAddress   String
+  notes         String?
+  isDefault     Boolean   @default(false)
+  /// Timestamp persetujuan pengguna untuk pemakaian alamat ke kebutuhan
+  /// layanan offline. Null = alamat tidak boleh dipakai operasional.
+  serviceUseConsentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_addresses")
+}
