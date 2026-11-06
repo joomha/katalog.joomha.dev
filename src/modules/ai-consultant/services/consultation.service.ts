@@ -5,6 +5,8 @@ import { ProviderError } from "../providers/provider.types";
 import { buildConsultantSystemPrompt } from "../prompts/consultant-prompts";
 import { consultationMessageSchema, type ConsultationMode } from "../schemas/consultation.schema";
 import { consultantToolDefinitions, executeConsultantTool } from "../tools/allowlist";
+import { OpenRouterEmbeddingProvider } from "../rag/openrouter-embedding.provider";
+import { retrieveKnowledge } from "../rag/retrieval";
 
 const provider = new OpenRouterProvider();
 const MAX_HISTORY = 20;
@@ -31,8 +33,18 @@ export async function sendConsultationMessage(input: unknown, userId?: string) {
   await prisma.consultationMessage.create({ data: { conversationId: conversation.id, role: "USER", content: data.message } });
   const history = await prisma.consultationMessage.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: MAX_HISTORY });
   const messages = history.reverse().map((item) => ({ role: item.role === "USER" ? "user" as const : item.role === "TOOL" ? "tool" as const : "assistant" as const, content: item.content }));
+  let retrievedContext: string[] = [];
+  try {
+    const retrieved = await retrieveKnowledge(data.message, new OpenRouterEmbeddingProvider(), {
+      limit: 5,
+      roles: userId ? ["CUSTOMER"] : [],
+    });
+    retrievedContext = retrieved.map((item) => `[${item.title}] ${item.content}`);
+  } catch {
+    retrievedContext = [];
+  }
   const prompt = [
-    { role: "system" as const, content: buildConsultantSystemPrompt(data.mode as ConsultationMode) },
+    { role: "system" as const, content: buildConsultantSystemPrompt(data.mode as ConsultationMode, retrievedContext) },
     ...messages,
   ];
   try {
