@@ -4,10 +4,12 @@ import { UnauthenticatedError, AccessDeniedError } from "@/modules/identity/type
 export async function GET(_request:Request,context:{params:Promise<{id:string}>}){
  try{
   const {id}=await context.params,result=await getAuthorizedFileAccess(id);
+  const asciiName=result.metadata.originalName.replace(/[^\x20-\x7e]/g,"_").replace(/["\\\\]/g,"_");
+  const encodedName=encodeURIComponent(result.metadata.originalName);
   return new Response(Buffer.from(result.bytes),{headers:{
    "Content-Type":result.metadata.mimeType,
    "Content-Length":String(result.metadata.sizeBytes),
-   "Content-Disposition":'attachment; filename="'+result.metadata.originalName.replace(/["\\\\\r\n]/g,"_")+'"',
+   "Content-Disposition":'attachment; filename="'+asciiName+'"; filename*=UTF-8\'\''+encodedName,
    "X-Content-Type-Options":"nosniff",
    "Cache-Control":result.metadata.visibility==="PRIVATE"?"private, no-store":"public, max-age=300"
   }});
