@@ -9,7 +9,7 @@ export {
   listCustomerBusinessProjects, getCustomerBusinessProjectProgress, getBusinessProjectForAdmin,
   updateProjectMilestone, createProjectDeliverable, reviewProjectDeliverable,
   addProjectProgressUpdate, initiateProjectHandover, confirmProjectHandover,
-  updateBusinessProjectStatus, BusinessServiceError,
+  createBusinessProjectFromAcceptedProposal, updateBusinessProjectStatus,
 } from "./services/business-services.service";
 export * from "./schemas/business-service.schema";
 export * from "./workflow";

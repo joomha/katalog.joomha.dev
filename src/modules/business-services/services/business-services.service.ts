@@ -35,7 +35,7 @@ function publicServiceDetails(catalogItem: NonNullable<Awaited<ReturnType<typeof
     customerPreparation: definition.customerPreparation, pricingFactors: definition.pricingFactors,
     durationFactors: definition.durationFactors, priceType: catalogItem.priceType,
     priceLabel: catalogItem.priceLabel, ctaLabel: definition.ctaLabel,
-    ctaLink: `/akun/proyek/ajukan?layanan=${encodeURIComponent(definition.slug)}`,
+    ctaLink: `/jasa-digitalisasi/ajukan?layanan=${encodeURIComponent(definition.slug)}`,
     coverImage: catalogItem.primaryCover,
     coverAlt: catalogItem.assets.find((asset) => asset.isPrimary)?.altText ?? `Sampul ${catalogItem.title}`,
     category: catalogItem.category.name,
@@ -119,7 +119,10 @@ export async function attachConsultationLeadToServiceRequest(requestId: string, 
 export async function listCustomerBusinessRequests() {
   const user = await assertAuthenticated();
   return prisma.businessServiceRequest.findMany({
-    where: { userId: user.id }, orderBy: { createdAt: "desc" },
+    where: user.emailVerified
+      ? { OR: [{ userId: user.id }, { userId: null, contactEmail: { equals: user.email, mode: "insensitive" } }] }
+      : { userId: user.id },
+    orderBy: { createdAt: "desc" },
     select: {
       id: true, serviceSlug: true, serviceTitleSnapshot: true, status: true,
       mainProblem: true, desiredOutcome: true, createdAt: true,
@@ -350,7 +353,13 @@ export async function decideBusinessProposal(proposalId: string, revisionId: str
       where: { id: proposalId }, include: { request: true, revisions: { where: { id: revisionId } } },
     });
     if (!proposal || proposal.revisions.length === 0) throw new BusinessServiceError("Proposal tidak ditemukan.", "NOT_FOUND");
-    if (proposal.request.userId !== actor.id) throw new BusinessServiceError("Anda tidak memiliki akses ke proposal ini.", "FORBIDDEN");
+    const isOwner = proposal.request.userId === actor.id;
+    const verifiedGuestOwner = proposal.request.userId === null
+      && actor.emailVerified
+      && proposal.request.contactEmail.toLowerCase() === actor.email.toLowerCase();
+    if (!isOwner && !verifiedGuestOwner) {
+      throw new BusinessServiceError("Proposal hanya dapat diputuskan oleh pemilik permintaan atau akun terverifikasi dengan email yang sama.", "FORBIDDEN");
+    }
     const revision = proposal.revisions[0];
     if (proposal.currentVersion !== revision.version) throw new BusinessServiceError("Versi proposal ini bukan versi yang berlaku.", "INVALID_STATE");
     assertCustomerCanDecideProposal({ proposalStatus: proposal.status, revisionStatus: revision.status, validUntil: revision.validUntil });
@@ -364,7 +373,10 @@ export async function decideBusinessProposal(proposalId: string, revisionId: str
       where: { id: proposalId },
       data: accepted ? { status: "ACCEPTED", acceptedAt: now } : { status: "REJECTED", rejectedAt: now, rejectionReason: cleanOptional(parsed.feedback) },
     });
-    const project = accepted ? await createProjectInTransaction(tx, proposal, revision) : null;
+    const projectProposal = verifiedGuestOwner
+      ? { ...proposal, request: { ...proposal.request, userId: actor.id } }
+      : proposal;
+    const project = accepted ? await createProjectInTransaction(tx, projectProposal, revision) : null;
     if (accepted) await tx.businessServiceRequest.update({ where: { id: proposal.requestId }, data: { status: "CONVERTED_TO_PROJECT" } });
     return { accepted, revision: updatedRevision, project, proposal };
   });
@@ -405,12 +417,26 @@ function toCustomerProject(project: {
     status: project.status, totalAmount: Number(project.totalAmount), currency: project.currency,
     plannedStartAt: project.plannedStartAt, targetCompletionAt: project.targetCompletionAt,
     completedAt: project.completedAt, handoverSummary: project.handoverSummary,
-    handoverConfirmedAt: project.handoverConfirmedAt, milestones: project.milestones,
-    deliverables: project.deliverables, paymentTerms: project.paymentTerms.map((term) => ({ ...term, amount: Number(term.amount) })),
-    updates: project.updates,
+    handoverConfirmedAt: project.handoverConfirmedAt,
+    milestones: project.milestones.map((item) => ({
+      id: item.id, title: item.title, description: item.description, sequence: item.sequence,
+      targetDate: item.targetDate, status: item.status, progress: item.progress, acceptanceCriteria: item.acceptanceCriteria,
+    })),
+    deliverables: project.deliverables.map((item) => ({
+      id: item.id, milestoneId: item.milestoneId, title: item.title, description: item.description,
+      type: item.type, fileName: item.fileName, externalUrl: item.externalUrl,
+      version: item.version, reviewStatus: item.reviewStatus, reviewedAt: item.reviewedAt,
+      feedback: item.feedback, createdAt: item.createdAt,
+    })),
+    paymentTerms: project.paymentTerms.map((term) => ({
+      id: term.id, sequence: term.sequence, label: term.label, description: term.description,
+      amount: Number(term.amount), currency: term.currency, dueAt: term.dueAt, status: term.status, paidAt: term.paidAt,
+    })),
+    updates: project.updates.map((update) => ({
+      id: update.id, message: update.message, progress: update.progress, createdAt: update.createdAt,
+    })),
   };
 }
-
 export async function listCustomerBusinessProjects() {
   const actor = await assertAuthenticated();
   const projects = await prisma.businessProject.findMany({
@@ -573,6 +599,38 @@ export async function confirmProjectHandover(projectId: string) {
   });
   await eventBus.publish("ProjectMilestoneUpdated", { projectId, projectStatus: "COMPLETED" }, projectId);
   return updated;
+}
+
+/** Recovery contract: create a project when a proposal was accepted but conversion was interrupted. */
+export async function createBusinessProjectFromAcceptedProposal(proposalId: string) {
+  await assertPermission(PERMISSIONS.BUSINESS_MANAGE);
+  const outcome = await prisma.$transaction(async (tx) => {
+    const proposal = await tx.businessProposal.findUnique({
+      where: { id: proposalId },
+      include: { request: true, revisions: { where: { status: "ACCEPTED" }, orderBy: { version: "desc" }, take: 1 }, project: true },
+    });
+    if (!proposal) throw new BusinessServiceError("Proposal tidak ditemukan.", "NOT_FOUND");
+    if (proposal.project) return { project: proposal.project, created: false, proposal };
+    if (proposal.status !== "ACCEPTED" || proposal.revisions.length === 0) {
+      throw new BusinessServiceError("Hanya proposal yang telah diterima customer yang dapat dibuat menjadi proyek.", "INVALID_STATE");
+    }
+    const project = await createProjectInTransaction(tx, proposal, proposal.revisions[0]);
+    await tx.businessServiceRequest.update({ where: { id: proposal.requestId }, data: { status: "CONVERTED_TO_PROJECT" } });
+    return { project, created: true, proposal };
+  });
+  if (outcome.created) {
+    await eventBus.publish("BusinessProposalApproved", {
+      proposalId, proposalRevisionId: outcome.project.proposalRevisionId,
+      requestId: outcome.proposal.requestId, projectId: outcome.project.id,
+      projectCode: outcome.project.projectCode, customerUserId: outcome.project.customerUserId,
+      currency: outcome.project.currency,
+      paymentTerms: outcome.project.paymentTerms.map((term) => ({
+        paymentTermId: term.id, sequence: term.sequence, label: term.label,
+        amount: Number(term.amount), currency: term.currency, dueAt: term.dueAt?.toISOString() ?? null,
+      })),
+    }, outcome.project.id);
+  }
+  return outcome.project;
 }
 
 export async function updateBusinessProjectStatus(projectId: string, status: BusinessProjectStatus) {

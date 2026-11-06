@@ -19,8 +19,8 @@ export const BusinessServiceRequestSchema = z.object({
   currentTools: stringList,
   desiredOutcome: z.string().trim().min(8).max(8000),
   integrationNeeds: stringList,
-  budgetMin: z.number().finite().nonnegative().max(1_000_000_000_000).optional(),
-  budgetMax: z.number().finite().nonnegative().max(1_000_000_000_000).optional(),
+  budgetMin: z.number().finite().nonnegative().max(999_999_999_999.99).optional(),
+  budgetMax: z.number().finite().nonnegative().max(999_999_999_999.99).optional(),
   budgetNote: optionalText(2000),
   targetDate: dateText,
   attachments: z.array(z.object({
@@ -55,7 +55,7 @@ const proposalPaymentTermSchema = z.object({
   label: z.string().trim().min(2).max(120),
   description: optionalText(500),
   sequence: z.number().int().positive(),
-  amount: z.number().finite().positive().max(1_000_000_000_000),
+  amount: z.number().finite().positive().max(999_999_999_999.99),
   dueAt: dateText,
 });
 
@@ -69,7 +69,7 @@ export const BusinessProposalDraftSchema = z.object({
   estimatedDurationDays: z.number().int().positive().max(3650),
   plannedStartAt: dateText,
   targetCompletionAt: dateText,
-  totalAmount: z.number().finite().nonnegative().max(1_000_000_000_000),
+  totalAmount: z.number().finite().positive().max(999_999_999_999.99),
   currency: z.string().trim().length(3).default("IDR"),
   milestones: z.array(proposalMilestoneSchema).min(1).max(40),
   paymentTerms: z.array(proposalPaymentTermSchema).min(1).max(20),
@@ -114,7 +114,7 @@ export const ProjectDeliverableCreateSchema = z.object({
   type: z.enum(["FILE", "LINK", "DESCRIPTION"]),
   fileName: optionalText(180),
   storageKey: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9/_-]{0,179}$/).refine((value) => !value.includes("..") && !value.includes("\\")).optional(),
-  externalUrl: z.string().url().max(2000).optional(),
+  externalUrl: z.string().url().max(2000).refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Tautan harus menggunakan HTTP atau HTTPS.").optional(),
 }).superRefine((value, context) => {
   if (value.type === "FILE" && (!value.fileName || !value.storageKey)) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["storageKey"], message: "File memerlukan nama file dan storage key yang telah divalidasi." });

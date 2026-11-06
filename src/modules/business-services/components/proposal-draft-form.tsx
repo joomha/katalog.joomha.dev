@@ -11,7 +11,8 @@ export function ProposalDraftForm({ requestId, defaultProblem }: { requestId: st
   const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const totalAmount = Number(form.get("totalAmount"));
     const days = Number(form.get("estimatedDurationDays"));
     const validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -38,7 +39,7 @@ export function ProposalDraftForm({ requestId, defaultProblem }: { requestId: st
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "Draft proposal belum tersimpan.");
-      event.currentTarget.reset(); router.refresh();
+      formElement.reset(); router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Terjadi kesalahan.");
     } finally { setBusy(false); }

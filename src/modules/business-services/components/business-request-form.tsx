@@ -19,7 +19,8 @@ export function BusinessRequestForm({ services, defaultServiceSlug = "" }: Props
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError(""); setMessage("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const budgetMinText = String(form.get("budgetMin") ?? "").trim();
     const budgetMaxText = String(form.get("budgetMax") ?? "").trim();
     const targetDateText = String(form.get("targetDate") ?? "").trim();
@@ -51,7 +52,7 @@ export function BusinessRequestForm({ services, defaultServiceSlug = "" }: Props
       const result = await response.json() as { data?: { id?: string; status?: string }; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Permintaan belum dapat disimpan.");
       setMessage(`Permintaan berhasil dicatat dengan nomor ${result.data?.id ?? "baru"}. Tim Joomha akan meninjau kebutuhan Anda.`);
-      event.currentTarget.reset();
+      formElement.reset();
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Terjadi kesalahan. Silakan coba kembali.");
@@ -104,7 +105,7 @@ export function BusinessRequestForm({ services, defaultServiceSlug = "" }: Props
       </section>
 
       {error && <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      {message && <div role="status" className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900"><p>{message}</p><a href="/akun/proyek" className="mt-2 inline-block font-semibold underline">Lihat permintaan dan proyek di akun saya</a></div>}
+      {message && <div role="status" className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900"><p>{message}</p><a href="/masuk?callbackUrl=%2Fakun%2Fproyek" className="mt-2 inline-block font-semibold underline">Masuk untuk melihat status permintaan dan proyek</a></div>}
       <button type="submit" disabled={busy} className="rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60">{busy ? "Mengirim..." : "Kirim Permintaan Proyek"}</button>
     </form>
   );
