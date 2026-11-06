@@ -9,7 +9,7 @@ import { AccessDeniedError } from "@/modules/identity/types";
 import { getStorageAdapter } from "@/lib/storage";
 import { writeAuditLog } from "./audit.service";
 import { getMaxUploadBytes } from "./settings.service";
-import type { UploadStoredFileInput } from "./types";
+import type { StoredFileMetadata, UploadStoredFileInput } from "./types";
 const EXTENSION_MIME:Record<string,string>={pdf:"application/pdf",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",txt:"text/plain",md:"text/markdown"};
 function detectMime(bytes:Uint8Array,extension:string):string|null{
  const starts=(...sig:number[])=>sig.every((b,i)=>bytes[i]===b);
@@ -39,7 +39,7 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
  try{
   const stored=await prisma.storedFile.create({data:{ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as Prisma.InputJsonObject):undefined}});
   await writeAuditLog({actorId:actor.id,action:"platform.file.uploaded",targetType:"StoredFile",targetId:stored.id,metadata:{mimeType:mime,sizeBytes:input.bytes.byteLength,visibility:stored.visibility}});
-  return stored;
+  return {id:stored.id,ownerId:stored.ownerId,originalName:stored.originalName,mimeType:stored.mimeType,extension:stored.extension,sizeBytes:Number(stored.sizeBytes),visibility:stored.visibility,status:stored.status,metadata:stored.metadata,createdAt:stored.createdAt,updatedAt:stored.updatedAt} satisfies StoredFileMetadata;
  }catch(error){await adapter.delete(key);throw error;}
 }
 export async function getAuthorizedFileAccess(fileId:string,authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>){
@@ -53,7 +53,8 @@ export async function getAuthorizedFileAccess(fileId:string,authorizeEntitlement
   if(!isOwner&&!hasManage&&!entitled)throw new Error("File access denied");
  }
  const bytes=await getStorageAdapter().get(file.storageKey);
- return {metadata:file,bytes};
+ const metadata={id:file.id,ownerId:file.ownerId,originalName:file.originalName,mimeType:file.mimeType,extension:file.extension,sizeBytes:Number(file.sizeBytes),visibility:file.visibility,status:file.status,metadata:file.metadata,createdAt:file.createdAt,updatedAt:file.updatedAt} satisfies StoredFileMetadata;
+ return {metadata,bytes};
 }
 export async function deleteStoredFile(fileId:string){
  const actor=await assertAuthenticated(),file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
