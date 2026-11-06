@@ -116,7 +116,7 @@ model KnowledgeDocument {
   storageKey      String?
   status          KnowledgeDocumentStatus @default(UPLOADED)
   visibility      KnowledgeVisibility    @default(STAFF)
-  allowedRoles    String[]               @default([])
+  allowedRoles    String[]               @default([]) @map("allowed_roles")
   chunkCount      Int                    @default(0)
   errorMessage    String?
   uploadedBy      String?                @db.Uuid
