@@ -41,9 +41,9 @@ export async function sendConsultationMessage(
   });
   if (recentCount >= 12) throw new Error("Batas pesan tercapai. Tunggu satu menit sebelum mengirim pesan lagi.");
   await prisma.consultationMessage.create({ data: { conversationId: conversation.id, role: "USER", content: data.message } });
-  const history = await prisma.consultationMessage.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: MAX_HISTORY });
+  const history = await prisma.consultationMessage.findMany({ where: { conversationId: conversation.id, role: { in: ["USER", "ASSISTANT", "ADMIN"] } }, orderBy: { createdAt: "desc" }, take: MAX_HISTORY });
   const messages: ChatMessage[] = history.reverse().map((item) => ({
-    role: (item.role === "USER" ? "user" : item.role === "TOOL" ? "tool" : "assistant") as ChatMessage["role"],
+    role: (item.role === "USER" ? "user" : "assistant") as ChatMessage["role"],
     content: item.content.slice(0, 3_000),
   }));
   let retrievedContext: string[] = [];
