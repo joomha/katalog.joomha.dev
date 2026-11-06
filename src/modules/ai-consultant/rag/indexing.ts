@@ -26,6 +26,8 @@ export async function indexKnowledgeText(input: {
   if (new TextEncoder().encode(input.text).byteLength > MAX_UPLOAD_BYTES) {
     throw new Error("Ukuran dokumen melebihi batas 5 MB.");
   }
+  const expectedDimensions = Number(process.env.OPENROUTER_EMBEDDING_DIMENSIONS || 1536);
+  if (!Number.isInteger(expectedDimensions) || expectedDimensions < 1 || expectedDimensions > 8192) throw new Error("OPENROUTER_EMBEDDING_DIMENSIONS tidak valid.");
   const chunks = chunkKnowledgeText(input.text);
   if (!chunks.length) throw new Error("Dokumen tidak berisi teks yang dapat diindeks.");
   const document = await prisma.knowledgeDocument.create({
@@ -40,8 +42,8 @@ export async function indexKnowledgeText(input: {
   });
   try {
     const vectors = await embeddingProvider.embed(chunks.map((chunk) => chunk.content));
-    if (vectors.length !== chunks.length || vectors.some((vector) => vector.length !== 1536)) {
-      throw new Error("Dimensi embedding harus konsisten (1536).");
+    if (vectors.length !== chunks.length || vectors.some((vector) => vector.length !== expectedDimensions)) {
+      throw new Error("Dimensi embedding harus konsisten dengan OPENROUTER_EMBEDDING_DIMENSIONS.");
     }
     await prisma.$transaction(async (tx) => {
       for (let index = 0; index < chunks.length; index += 1) {
