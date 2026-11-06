@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import type { ChatMessage } from "../providers/provider.types";
+import type { ChatMessage } from "../providers/provider.types";
 import { OpenRouterProvider } from "../providers/openrouter.provider";
 import { ProviderError } from "../providers/provider.types";
 import { buildConsultantSystemPrompt } from "../prompts/consultant-prompts";
@@ -38,7 +39,7 @@ export async function sendConsultationMessage(input: unknown, userId?: string) {
   await prisma.consultationMessage.create({ data: { conversationId: conversation.id, role: "USER", content: data.message } });
   const history = await prisma.consultationMessage.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: MAX_HISTORY });
   const messages: ChatMessage[] = history.reverse().map((item) => ({
-    role: item.role === "USER" ? "user" : item.role === "TOOL" ? "tool" : "assistant",
+    role: (item.role === "USER" ? "user" : item.role === "TOOL" ? "tool" : "assistant") as ChatMessage["role"],
     content: item.content.slice(0, 3_000),
   }));
   let retrievedContext: string[] = [];
