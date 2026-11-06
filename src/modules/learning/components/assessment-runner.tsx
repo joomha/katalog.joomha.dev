@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { startAssessmentAttemptAction, submitAssessmentAttemptAction } from "@/modules/learning/actions";
+import { startAssessmentAttemptAction, saveAssessmentAttemptDraftAction, submitAssessmentAttemptAction } from "@/modules/learning/actions";
 
 type Option = { id: string; label: string };
 type Question = { id: string; type: string; prompt: string; points: number; options: Option[] };
-type Attempt = { attemptId: string; title: string; stage: string; instructions: string | null; questions: Question[]; deadlineAt: string | Date | null };
+type Attempt = { attemptId: string; title: string; stage: string; instructions: string | null; questions: Question[]; deadlineAt: string | Date | null; answers?: Array<{ questionId: string; answer: unknown }> };
 type Result = {
   score: number; earnedPoints: number; maxPoints: number; passed: boolean; pendingReview: boolean;
   questionResults?: Array<{ questionId: string; isCorrect: boolean | null; explanation: string | null }>;
@@ -21,6 +21,7 @@ export function AssessmentRunner({ assessmentId }: { assessmentId: string }) {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [draftStatus, setDraftStatus] = useState<string>("");
   const [busy, startTransition] = useTransition();
 
   useEffect(() => {
@@ -32,14 +33,27 @@ export function AssessmentRunner({ assessmentId }: { assessmentId: string }) {
     return () => window.clearInterval(timer);
   }, [attempt?.deadlineAt]);
 
+  useEffect(() => {
+    if (!attempt || result) return;
+    const payload = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
+    const timeout = window.setTimeout(() => {
+      setDraftStatus("Menyimpan draft...");
+      void saveAssessmentAttemptDraftAction(attempt.attemptId, payload)
+        .then(() => setDraftStatus("Draft tersimpan"))
+        .catch(() => setDraftStatus("Draft belum tersimpan"));
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [attempt?.attemptId, answers, result]);
+
   const setAnswer = (id: string, value: unknown) => setAnswers((current) => ({ ...current, [id]: value }));
   const start = () => {
     setError(null);
     startTransition(async () => {
       try {
         const data = await startAssessmentAttemptAction(assessmentId);
-        setAttempt(data as Attempt);
-        setAnswers({});
+        const next = data as Attempt;
+        setAttempt(next);
+        setAnswers(Object.fromEntries((next.answers ?? []).map((row) => [row.questionId, row.answer])));
         setResult(null);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "Assessment tidak dapat dimulai.");
@@ -103,6 +117,7 @@ export function AssessmentRunner({ assessmentId }: { assessmentId: string }) {
         {attempt.deadlineAt && <span className={"font-mono text-sm font-bold " + (secondsLeft === 0 ? "text-red-600" : "text-primary")}>{formatSeconds(secondsLeft ?? 0)}</span>}
       </div>
       {attempt.instructions && <p className="mt-2 text-sm text-muted-foreground">{attempt.instructions}</p>}
+      {draftStatus && <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">{draftStatus}</p>}
       <div className="mt-4 space-y-5">
         {attempt.questions.map((question, index) => (
           <fieldset key={question.id} className="space-y-3 rounded-lg bg-muted/40 p-3">
