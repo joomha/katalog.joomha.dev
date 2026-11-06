@@ -20,7 +20,7 @@ export async function startGameAttempt(gameId: string) {
   const game = await prisma.learningGame.findFirst({ where: { id: gameId, isPublished: true } });
   if (!game) throw new Error("Game tidak ditemukan atau belum diterbitkan.");
   const enrollment = await getActiveEnrollmentForCourse(game.courseId, user.id);
-  if (!enrollment) throw new Error("Enrollment aktif tidak ditemukan.");
+  if (!enrollment || enrollment.status !== "ACTIVE") throw new Error("Enrollment aktif tidak ditemukan.");
   if (game.chapterId) {
     const gates = await loadChapterGateStates(game.courseId, enrollment.id);
     const index = gates.findIndex((chapter) => chapter.id === game.chapterId);
