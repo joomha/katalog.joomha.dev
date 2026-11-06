@@ -32,7 +32,7 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
  if(input.visibility==="PUBLIC"&&!actor.roles.includes("SUPERADMIN"))await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  const {name,extension}=normalizeName(input.originalName),mime=detectMime(input.bytes,extension);
  if(!mime||mime!==EXTENSION_MIME[extension]||mime!==input.mimeType)throw new Error("File content does not match an allowed MIME type");
- const configuredMax=await getMaxUploadBytes(),max=Math.min(input.maxSizeBytes??configuredMax,configuredMax);
+ const configuredMax=await getMaxUploadBytes(),requestedMax=Number.isFinite(input.maxSizeBytes)?Math.max(1,input.maxSizeBytes as number):configuredMax,max=Math.min(requestedMax,configuredMax);
  if(input.bytes.byteLength===0||input.bytes.byteLength>max)throw new Error("File size is outside the allowed range");
  const checksum=createHash("sha256").update(input.bytes).digest("hex"),key=checksum.slice(0,2)+"/"+randomUUID()+"."+extension;
  const adapter=getStorageAdapter();await adapter.put({key,bytes:input.bytes,contentType:mime});
