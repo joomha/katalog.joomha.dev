@@ -33,6 +33,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     await assertRole(["ADMIN", "SUPERADMIN"]);
     const parsed = assignSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Penugasan tidak valid." }, { status: 400 });
+    const assignee = await prisma.user.findFirst({
+      where: { id: parsed.data.assignedUserId, isActive: true, roles: { some: { role: "INSTRUCTOR" } } },
+      select: { id: true },
+    });
+    if (!assignee) return NextResponse.json({ error: "Pengguna tujuan bukan instruktur aktif." }, { status: 400 });
     const { id } = await context.params;
     const updated = await prisma.consultationConversation.update({
       where: { id },
