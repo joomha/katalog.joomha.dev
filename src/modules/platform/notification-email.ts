@@ -12,6 +12,6 @@ export const emailAdapter:EmailAdapter=new ConsoleEmailAdapter();
 export async function sendEmailWithRetry(message:EmailMessage,maxAttempts=2):Promise<EmailSendResult>{
  const attempts=Math.max(1,Math.min(maxAttempts,3));
  let last:EmailSendResult={ok:false,retryable:false,errorCode:"NOT_ATTEMPTED"};
- for(let i=0;i<attempts;i++){last=await emailAdapter.send(message);if(last.ok||!last.retryable)return last;}
+ for(let i=0;i<attempts;i++){try{last=await emailAdapter.send(message);}catch{last={ok:false,retryable:true,errorCode:"EMAIL_ADAPTER_ERROR"};}if(last.ok||!last.retryable)return last;}
  return last;
 }
