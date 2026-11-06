@@ -6,6 +6,7 @@ import { assertAuthenticated, assertPermission } from "@/modules/identity/guards
 import { PERMISSIONS } from "@/modules/identity/permissions";
 import { getStorageAdapter } from "@/lib/storage";
 import { writeAuditLog } from "./audit.service";
+import { getMaxUploadBytes } from "./settings.service";
 import type { UploadStoredFileInput } from "./types";
 const EXTENSION_MIME:Record<string,string>={pdf:"application/pdf",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",txt:"text/plain",md:"text/markdown"};
 function detectMime(bytes:Uint8Array,extension:string):string|null{
@@ -28,7 +29,7 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
  if(input.ownerId&&input.ownerId!==actor.id)await assertPermission(PERMISSIONS.PLATFORM_MANAGE);
  const {name,extension}=normalizeName(input.originalName),mime=detectMime(input.bytes,extension);
  if(!mime||mime!==EXTENSION_MIME[extension]||mime!==input.mimeType)throw new Error("File content does not match an allowed MIME type");
- const max=input.maxSizeBytes??10*1024*1024;
+ const configuredMax=await getMaxUploadBytes(),max=Math.min(input.maxSizeBytes??configuredMax,configuredMax);
  if(input.bytes.byteLength===0||input.bytes.byteLength>max)throw new Error("File size is outside the allowed range");
  const checksum=createHash("sha256").update(input.bytes).digest("hex"),key=checksum.slice(0,2)+"/"+randomUUID()+"."+extension;
  const adapter=getStorageAdapter();await adapter.put({key,bytes:input.bytes,contentType:mime});

@@ -1,10 +1,11 @@
 import type { EmailMessage, EmailSendResult } from "./types";
 export interface EmailAdapter { send(message:EmailMessage):Promise<EmailSendResult> }
 export class ConsoleEmailAdapter implements EmailAdapter {
- async send(message:EmailMessage):Promise<EmailSendResult> {
-  if(process.env.NODE_ENV==="production") return {ok:false,retryable:false,errorCode:"EMAIL_PROVIDER_NOT_CONFIGURED"};
+ async send(message:EmailMessage):Promise<EmailSendResult>{
+  if(process.env.MAIL_DRIVER==="smtp")return {ok:false,retryable:false,errorCode:"SMTP_PROVIDER_NOT_IMPLEMENTED"};
+  if(process.env.NODE_ENV==="production")return {ok:false,retryable:false,errorCode:"EMAIL_PROVIDER_NOT_CONFIGURED"};
   console.info("[email:mock]",{to:message.to,subject:message.subject,messageLength:message.text.length});
-  return {ok:true,providerMessageId:`mock-${Date.now()}`};
+  return {ok:true,providerMessageId:"mock-"+Date.now()};
  }
 }
 export const emailAdapter:EmailAdapter=new ConsoleEmailAdapter();

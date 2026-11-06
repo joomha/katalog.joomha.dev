@@ -3,11 +3,11 @@ import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StorageAdapter, StorageObjectMetadata, StoragePutInput } from "./types";
 function storageRoot(){
- const configured=path.resolve(process.cwd(),process.env.STORAGE_LOCAL_ROOT??"./var/private-files");
+ const configured=path.resolve(process.cwd(),process.env.STORAGE_LOCAL_ROOT??"./node_modules/.cache/joomha-private-files");
  const publicRoot=path.resolve(process.cwd(),"public");
  if(configured===publicRoot||configured.startsWith(publicRoot+path.sep)){
-  console.warn("[storage] STORAGE_LOCAL_ROOT points inside public/. Falling back to ./var/private-files.");
-  return path.resolve(process.cwd(),"var/private-files");
+  console.warn("[storage] STORAGE_LOCAL_ROOT points inside public/. Falling back to ignored node_modules/.cache storage.");
+  return path.resolve(process.cwd(),"node_modules/.cache/joomha-private-files");
  }
  return configured;
 }

@@ -20,6 +20,10 @@ export function parseSystemSettingValue(key:string,value:unknown){
  if(!Object.prototype.hasOwnProperty.call(SCHEMAS,key))throw new Error("System setting key is not allowlisted");
  return SCHEMAS[key as SystemSettingKey].parse(value);
 }
+export async function getMaxUploadBytes(){
+ const row=await prisma.systemSetting.findUnique({where:{key:"maxUploadBytes"},select:{value:true}});
+ return row?parseSystemSettingValue("maxUploadBytes",row.value) as number:DEFAULTS.maxUploadBytes;
+}
 export async function getPublicSystemSettings():Promise<PublicSystemSettings>{
  const rows=await prisma.systemSetting.findMany({where:{key:{in:[...PUBLIC_KEYS]},isPublic:true}});
  const v:Record<string,unknown>={...DEFAULTS};for(const row of rows)v[row.key]=row.value;
