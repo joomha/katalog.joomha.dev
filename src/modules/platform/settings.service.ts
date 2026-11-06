@@ -28,8 +28,8 @@ export async function getPublicSystemSettings():Promise<PublicSystemSettings>{
 export async function getAdminSystemSettings(){
  await assertPermission(PERMISSIONS.PLATFORM_VIEW);
  const rows=await prisma.systemSetting.findMany({where:{key:{in:Object.keys(SCHEMAS)}},orderBy:{key:"asc"}});
- const v:Record<string,unknown>={...DEFAULTS};for(const row of rows)v[row.key]=row.value;
- return v as typeof DEFAULTS;
+ const values:Record<string,unknown>={...DEFAULTS};for(const row of rows)values[row.key]=parseSystemSettingValue(row.key,row.value);
+ return values as typeof DEFAULTS;
 }
 export async function updateSystemSetting<K extends SystemSettingKey>(key:K,value:z.infer<(typeof SCHEMAS)[K]>){
  const actor=await assertPermission(PERMISSIONS.PLATFORM_MANAGE),parsed=parseSystemSettingValue(key,value),isPublic=PUBLIC_KEYS.includes(key);
