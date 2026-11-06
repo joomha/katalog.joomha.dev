@@ -74,6 +74,12 @@ export class OpenRouterProvider implements LlmProvider {
         finishReason: choice.finish_reason ?? null,
       };
     } catch (error) {
+      if (error instanceof ProviderError && error.retryable) {
+        const fallbackModel = process.env.OPENROUTER_FALLBACK_MODEL?.trim();
+        if (fallbackModel && fallbackModel !== (options.model ?? env.OPENROUTER_DEFAULT_MODEL)) {
+          return this.complete({ ...options, model: fallbackModel });
+        }
+      }
       if (error instanceof ProviderError) throw error;
       if (error instanceof Error && error.name === "AbortError") throw new ProviderError("Permintaan AI melewati batas waktu.", "TIMEOUT", true);
       throw new ProviderError("Tidak dapat menghubungi penyedia AI saat ini.", "UPSTREAM", true);
