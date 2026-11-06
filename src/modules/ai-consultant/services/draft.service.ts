@@ -31,7 +31,7 @@ export async function createConsultationDraft(input: unknown, userId?: string) {
     },
     update: {
       mode: data.mode,
-      payload: { status: "DRAFT", details: data.details, consentAt: new Date().toISOString() },
+      payload,
     },
   });
   await prisma.consultationConversation.update({
