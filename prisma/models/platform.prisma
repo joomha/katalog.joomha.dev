@@ -1,9 +1,21 @@
-enum NotificationCategory { TRANSACTIONAL LEARNING TUTORING BUSINESS CONSULTATION SYSTEM }
-enum NotificationChannel { IN_APP EMAIL }
-enum NotificationDeliveryStatus { PENDING SENT FAILED SKIPPED }
-enum StoredFileVisibility { PRIVATE PUBLIC }
-enum StoredFileStatus { ACTIVE ARCHIVED DELETED }
-
+// Shared platform services. Cross-domain User references are scalar UUIDs by contract.
+enum NotificationCategory {
+  TRANSACTIONAL
+  LEARNING
+  TUTORING
+  BUSINESS
+  CONSULTATION
+  SYSTEM
+}
+enum StoredFileVisibility {
+  PRIVATE
+  PUBLIC
+}
+enum StoredFileStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
 model Notification {
   id String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
