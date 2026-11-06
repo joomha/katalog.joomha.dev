@@ -112,10 +112,10 @@ via `role_permissions`.
 - Event dipetakan: `OrderPaid`, `OrderCancelled`, `CourseCompleted`, `CertificateIssued`, `TutoringQuoteAwaitingReview`, `QuoteApprovedByInstructor`, `TutoringSessionScheduled`, `ConsultationHandedOff`, `BusinessProposalApproved`, `ProjectMilestoneUpdated`; `EnrollmentCreated` juga didukung.
 
 ### Storage
-- `uploadStoredFile(input)`: wajib login; menyimpan metadata di `StoredFile`, random storage key, SHA-256, allowlist extension/MIME, dan pemeriksaan signature konten.
+- `uploadStoredFile(input)`: wajib login; menyimpan metadata di `StoredFile`, random storage key, SHA-256, allowlist extension/MIME, pemeriksaan signature konten, dan menerapkan `maxUploadBytes` dari SystemSetting.
 - `getAuthorizedFileAccess(fileId, authorizeEntitlement?)`: public file dapat diakses tanpa login; private file harus dimiliki user, admin, atau lolos callback entitlement.
 - `deleteStoredFile(fileId)` / `archiveStoredFile(fileId)`: pemilik file atau pemegang `platform.manage`.
-- Local adapter menyimpan di luar `public/`; env lama yang menunjuk ke `public/uploads` akan fallback ke `var/private-files`. S3 belum diaktifkan karena provider/SDK belum diputuskan.
+- Local adapter menyimpan di luar `public/`; env lama yang menunjuk ke `public/uploads` akan fallback ke `node_modules/.cache/joomha-private-files`. S3 belum diaktifkan karena provider/SDK belum diputuskan.
 
 ### Audit dan settings
 - `writeAuditLog(input)`: actor harus user aktif yang sedang login; aksi atas nama actor lain atau tanpa actor memerlukan `platform.manage`. Metadata sensitif disaring.
