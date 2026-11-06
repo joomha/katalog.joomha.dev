@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { requireLearningUser } from "./identity.adapter";
-import { canAccessChapter, canStartLessons, chapterComplete } from "./progression.service";
+import { canAccessChapter, canStartLessons, canStartChapterExam, chapterComplete } from "./progression.service";
 import { getActiveEnrollmentForCourse, loadChapterGateStates } from "./progression-query.service";
 
 export async function getEnrolledCoursePlayer(slug: string) {
@@ -61,7 +61,14 @@ export async function getEnrolledCoursePlayer(slug: string) {
         isLessonContentUnlocked: chapterGate.allowed && lessonGate.allowed,
         lessonGateReason: lessonGate.reason,
         isComplete: state ? chapterComplete(state) : false,
-        chapterAssessments: chapter.assessments,
+        chapterAssessments: chapter.assessments.map((assessment) => ({
+          ...assessment,
+          isAvailable: assessment.stage === "PRETEST"
+            ? chapterGate.allowed
+            : assessment.stage === "CHAPTER_EXAM"
+              ? chapterGate.allowed && Boolean(state && canStartChapterExam(state).allowed)
+              : chapterGate.allowed,
+        })),
         lessons: chapter.lessons.map((lesson) => ({
           id: lesson.id, slug: lesson.slug, title: lesson.title, description: lesson.description,
           displayOrder: lesson.displayOrder, isRequired: lesson.isRequired,
