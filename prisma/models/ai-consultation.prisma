@@ -1,5 +1,147 @@
-// ==============================================================================
-// AI CONSULTATION DOMAIN SCHEMA (Owned by Agent 08)
-// AiConversation, AiMessage, ConsultationLead, DocumentEmbedding, KnowledgeChunk
-// ==============================================================================
+// AI CONSULTATION DOMAIN — Agent 08. Migrations are owned by Agent 10.
 
+enum ConsultationMode {
+  LEARNING
+  BUSINESS
+  GENERAL
+}
+
+enum ConsultationStatus {
+  AI_CONSULTATION
+  PENDING_REVIEW
+  HUMAN_HANDOFF
+  HUMAN_ASSIGNED
+  REVISION_REQUIRED
+  CLOSED
+  CANCELLED
+}
+
+enum ConsultationMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  ADMIN
+  TOOL
+}
+
+enum KnowledgeDocumentStatus {
+  UPLOADED
+  INDEXING
+  INDEXED
+  FAILED
+  INACTIVE
+}
+
+enum KnowledgeVisibility {
+  PUBLIC
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+model ConsultationConversation {
+  id                String             @id @default(uuid()) @db.Uuid
+  userId            String?            @db.Uuid
+  guestSessionId    String?
+  mode              ConsultationMode   @default(GENERAL)
+  status            ConsultationStatus @default(AI_CONSULTATION)
+  assignedUserId    String?            @db.Uuid
+  handoffReason     String?
+  consentAt         DateTime?
+  consentScope      String[]           @default([])
+  lastMessageAt     DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  messages          ConsultationMessage[]
+  lead              ConsultationLead?
+  summary           ConsultationSummary?
+
+  @@index([userId, updatedAt])
+  @@index([guestSessionId, updatedAt])
+  @@index([status, updatedAt])
+  @@map("consultation_conversations")
+}
+
+model ConsultationMessage {
+  id             String                  @id @default(uuid()) @db.Uuid
+  conversationId String                  @db.Uuid
+  role           ConsultationMessageRole
+  content        String                  @db.Text
+  model          String?
+  promptTokens   Int?
+  completionTokens Int?
+  sourceRefs     Json?
+  metadata       Json?
+  createdAt      DateTime                @default(now())
+  conversation   ConsultationConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("consultation_messages")
+}
+
+model ConsultationLead {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @unique @db.Uuid
+  userId         String?  @db.Uuid
+  customerName   String?
+  customerEmail  String?
+  customerPhone  String?
+  mode           ConsultationMode
+  payload        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  conversation   ConsultationConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([mode, createdAt])
+  @@map("consultation_leads")
+}
+
+model ConsultationSummary {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @unique @db.Uuid
+  payload        Json
+  generatedAt    DateTime @default(now())
+  generatedBy    String?
+  conversation   ConsultationConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("consultation_summaries")
+}
+
+model KnowledgeDocument {
+  id              String                 @id @default(uuid()) @db.Uuid
+  title           String
+  originalName    String
+  mimeType        String
+  storageKey      String?
+  status          KnowledgeDocumentStatus @default(UPLOADED)
+  visibility      KnowledgeVisibility    @default(STAFF)
+  allowedRoles    String[]               @default([])
+  chunkCount      Int                    @default(0)
+  errorMessage    String?
+  uploadedBy      String?                @db.Uuid
+  indexedAt       DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  chunks          KnowledgeChunk[]
+
+  @@index([status, visibility])
+  @@index([uploadedBy, createdAt])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id             String   @id @default(uuid()) @db.Uuid
+  documentId     String   @db.Uuid
+  chunkIndex     Int
+  content        String   @db.Text
+  tokenEstimate  Int?
+  embedding      Unsupported("vector(1536)")?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  document       KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId, chunkIndex])
+  @@map("knowledge_chunks")
+}
