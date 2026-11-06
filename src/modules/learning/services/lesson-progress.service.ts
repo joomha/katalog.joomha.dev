@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { requireLearningUser } from "./identity.adapter";
-import { canAccessChapter } from "./progression.service";
+import { canAccessChapter, canStartLessons } from "./progression.service";
 import { getActiveEnrollmentForCourse, loadChapterGateStates } from "./progression-query.service";
 
 async function resolveLessonContext(lessonId: string, userId: string) {
@@ -18,6 +18,8 @@ async function resolveLessonContext(lessonId: string, userId: string) {
   const states = await loadChapterGateStates(lesson.chapter.courseId, enrollment.id);
   const chapterIndex = states.findIndex((chapter) => chapter.id === lesson.chapterId);
   if (!canAccessChapter(chapterIndex, states).allowed) throw new Error("Chapter masih terkunci.");
+  const chapter = states[chapterIndex];
+  if (!chapter || !canStartLessons(chapter).allowed) throw new Error("Luluskan pretest wajib sebelum membuka materi chapter.");
   return { lesson, enrollment, requiredBlockIds: lesson.contentBlocks.map((block) => block.id) };
 }
 
