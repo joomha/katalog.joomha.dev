@@ -10,14 +10,26 @@ async function persistNotification(input:CreateNotificationInput){
  const title=input.title.trim().slice(0,160),body=input.body.trim().slice(0,1200);
  if(!title||!body)throw new Error("Notification title and body are required");
  const pref=await prisma.notificationPreference.findUnique({where:{userId_category:{userId:input.userId,category:input.category}}});
- let notification=null;
- if(pref?.inAppEnabled!==false){
+ const inAppEnabled=input.category==="TRANSACTIONAL"||pref?.inAppEnabled!==false;
+ const emailEnabled=input.category==="TRANSACTIONAL"||pref?.emailEnabled!==false;
+ let notification=null,created=true;
+ if(inAppEnabled){
   const data={userId:input.userId,category:input.category,title,body,resourceUrl:safePath(input.resourceUrl),eventName:input.eventName??null,dedupeKey:input.dedupeKey??null};
-  notification=input.dedupeKey?await prisma.notification.upsert({where:{dedupeKey:input.dedupeKey},create:data,update:{}}):await prisma.notification.create({data});
+  if(input.dedupeKey){
+   try{notification=await prisma.notification.create({data});}
+   catch(error){
+    if((error as {code?:string}).code!=="P2002")throw error;
+    notification=await prisma.notification.findUnique({where:{dedupeKey:input.dedupeKey}});
+    created=false;
+   }
+  }else notification=await prisma.notification.create({data});
  }
- if(input.email&&pref?.emailEnabled!==false){
-  const result=await sendEmailWithRetry({to:input.email.to,subject:"Pemberitahuan Joomha Education",text:"Anda memiliki pemberitahuan baru di akun Joomha Education. Silakan masuk ke akun Anda untuk melihat detailnya."});
-  if(!result.ok)console.error("[platform:email-failed]",{userId:input.userId,category:input.category,errorCode:result.errorCode});
+ if(created&&emailEnabled){
+  const user=await prisma.user.findUnique({where:{id:input.userId},select:{email:true,isActive:true,emailVerified:true}});
+  if(user?.isActive&&user.emailVerified){
+   const result=await sendEmailWithRetry({to:user.email,subject:"Pemberitahuan Joomha Education",text:"Anda memiliki pemberitahuan baru di akun Joomha Education. Silakan masuk ke akun Anda untuk melihat detailnya."});
+   if(!result.ok)console.error("[platform:email-failed]",{userId:input.userId,category:input.category,errorCode:result.errorCode});
+  }
  }
  return notification;
 }
