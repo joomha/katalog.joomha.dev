@@ -84,4 +84,5 @@ No secret/API key was added to source files or commits.
 ## Branch / PR
 - Branch: agent/08-ai-consultant
 - Target: main unless maintainer has activated integration/development.
-- PR: pending; do not merge until follow-up contracts and validation gaps above are addressed.
+- Draft PR: https://github.com/joomha/katalog.joomha.dev/pull/5
+- Do not merge until follow-up contracts and validation gaps above are addressed.
