@@ -19,7 +19,7 @@ function resolveKey(key:string){
 }
 export class LocalStorageAdapter implements StorageAdapter{
  async put(input:StoragePutInput):Promise<StorageObjectMetadata>{
-  const target=resolveKey(input.key);await mkdir(path.dirname(target),{recursive:true});
+  const target=resolveKey(input.key);await mkdir(path.dirname(target),{recursive:true,mode:0o700});
   await writeFile(target,input.bytes,{flag:"wx",mode:0o600});
   return {key:input.key,sizeBytes:input.bytes.byteLength,contentType:input.contentType};
  }
