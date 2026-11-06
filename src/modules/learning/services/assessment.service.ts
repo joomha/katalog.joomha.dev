@@ -66,20 +66,54 @@ export async function startAssessmentAttempt(assessmentId: string) {
   const attempts = await prisma.assessmentAttempt.findMany({
     where: { enrollmentId: enrollment.id, assessmentId },
     orderBy: { attemptNumber: "desc" },
-    select: { attemptNumber: true, status: true, submittedAt: true },
+    select: { id: true, attemptNumber: true, status: true, submittedAt: true },
   });
+  const existingActive = attempts.find((row) => row.status === "IN_PROGRESS");
+  if (existingActive) {
+    const active = await prisma.assessmentAttempt.findUnique({ where: { id: existingActive.id } });
+    if (active?.deadlineAt && active.deadlineAt.getTime() < Date.now()) {
+      await prisma.assessmentAttempt.updateMany({
+        where: { id: active.id, status: "IN_PROGRESS" },
+        data: { status: "EXPIRED", submittedAt: new Date() },
+      });
+    } else if (active) {
+      const optionOrder = (active.optionOrder ?? {}) as Record<string, string[]>;
+      const questionById = new Map(assessment.questions.map((question) => [question.id, question]));
+      const orderedIds = active.questionOrder.length ? active.questionOrder : assessment.questions.map((question) => question.id);
+      const savedAnswers = Array.isArray(active.answerSnapshot)
+        ? active.answerSnapshot as unknown as Array<{ questionId: string; answer: unknown }>
+        : [];
+      return {
+        attemptId: active.id,
+        startedAt: active.startedAt,
+        deadlineAt: active.deadlineAt,
+        stage: assessment.stage,
+        title: assessment.title,
+        instructions: assessment.instructions,
+        answers: savedAnswers,
+        questions: orderedIds.map((id) => questionById.get(id)).filter((question): question is NonNullable<typeof question> => Boolean(question)).map((question) => {
+          const order = optionOrder[question.id] ?? question.options.map((option) => option.id);
+          const byId = new Map(question.options.map((option) => [option.id, option]));
+          return {
+            id: question.id, type: question.type, prompt: question.prompt, points: Number(question.points),
+            options: order.map((optionId) => byId.get(optionId)).filter((option): option is NonNullable<typeof option> => Boolean(option))
+              .map((option) => ({ id: option.id, label: option.label })),
+          };
+        }),
+      };
+    }
+  }
+
   const availability = evaluateAttemptAvailability({
     policy: { maxAttempts: assessment.maxAttempts, retryCooldownSeconds: assessment.retryCooldownSeconds },
     attemptCount: attempts.length,
-    activeAttempt: attempts.some((row) => row.status === "IN_PROGRESS"),
+    activeAttempt: false,
     lastFinishedAt: attempts.find((row) => row.submittedAt !== null)?.submittedAt ?? null,
   });
   if (!availability.allowed) {
-    const message = availability.reason === "ACTIVE_ATTEMPT"
-      ? "Anda masih memiliki attempt yang berjalan."
-      : availability.reason === "COOLDOWN"
-        ? "Masa jeda sebelum percobaan berikutnya belum berakhir."
-        : "Batas percobaan assessment sudah tercapai.";
+    const message = availability.reason === "COOLDOWN"
+      ? "Masa jeda sebelum percobaan berikutnya belum berakhir."
+      : "Batas percobaan assessment sudah tercapai.";
     throw new Error(message);
   }
 
@@ -92,38 +126,60 @@ export async function startAssessmentAttempt(assessmentId: string) {
   const startedAt = new Date();
   const attempt = await prisma.assessmentAttempt.create({
     data: {
-      enrollmentId: enrollment.id,
-      assessmentId,
-      attemptNumber: attempts.length + 1,
-      status: "IN_PROGRESS",
-      startedAt,
-      deadlineAt: attemptDeadline(startedAt, assessment.timeLimitSeconds),
+      enrollmentId: enrollment.id, assessmentId, attemptNumber: attempts.length + 1,
+      status: "IN_PROGRESS", startedAt, deadlineAt: attemptDeadline(startedAt, assessment.timeLimitSeconds),
       questionOrder: questions.map((question) => question.id),
       optionOrder: optionOrder as Prisma.InputJsonValue,
     },
   });
   return {
-    attemptId: attempt.id,
-    startedAt,
-    deadlineAt: attempt.deadlineAt,
-    stage: assessment.stage,
-    title: assessment.title,
-    instructions: assessment.instructions,
+    attemptId: attempt.id, startedAt, deadlineAt: attempt.deadlineAt,
+    stage: assessment.stage, title: assessment.title, instructions: assessment.instructions,
+    answers: [] as Array<{ questionId: string; answer: unknown }>,
     questions: questions.map((question) => {
       const order = optionOrder[question.id] ?? [];
       const byId = new Map(question.options.map((option) => [option.id, option]));
       return {
-        id: question.id,
-        type: question.type,
-        prompt: question.prompt,
-        points: Number(question.points),
-        options: order
-          .map((id) => byId.get(id))
-          .filter((option): option is NonNullable<typeof option> => Boolean(option))
+        id: question.id, type: question.type, prompt: question.prompt, points: Number(question.points),
+        options: order.map((id) => byId.get(id)).filter((option): option is NonNullable<typeof option> => Boolean(option))
           .map((option) => ({ id: option.id, label: option.label })),
       };
     }),
   };
+}
+
+export async function saveAssessmentAttemptDraft(
+  attemptId: string,
+  rawAnswers: Array<{ questionId: string; answer: unknown }>,
+) {
+  const user = await requireLearningUser();
+  const parsed = SubmitAssessmentAttemptSchema.parse({ attemptId, answers: rawAnswers });
+  const attempt = await prisma.assessmentAttempt.findUnique({
+    where: { id: attemptId },
+    include: {
+      enrollment: { select: { userId: true } },
+      assessment: { select: { questions: { select: { id: true } } } },
+    },
+  });
+  if (!attempt || attempt.enrollment.userId !== user.id) throw new Error("Attempt tidak ditemukan.");
+  if (attempt.status !== "IN_PROGRESS") throw new Error("Attempt tidak lagi aktif.");
+  if (attempt.deadlineAt && Date.now() > attempt.deadlineAt.getTime()) {
+    await prisma.assessmentAttempt.updateMany({
+      where: { id: attempt.id, status: "IN_PROGRESS" },
+      data: { status: "EXPIRED", submittedAt: new Date() },
+    });
+    throw new Error("Waktu pengerjaan assessment telah habis.");
+  }
+  const validIds = new Set(attempt.assessment.questions.map((question) => question.id));
+  if (parsed.answers.some((answer) => !validIds.has(answer.questionId))) {
+    throw new Error("Draft berisi pertanyaan di luar assessment.");
+  }
+  const saved = await prisma.assessmentAttempt.updateMany({
+    where: { id: attempt.id, status: "IN_PROGRESS" },
+    data: { answerSnapshot: toJson(parsed.answers) },
+  });
+  if (saved.count !== 1) throw new Error("Attempt berubah saat draft disimpan.");
+  return { saved: true, savedAt: new Date() };
 }
 
 export async function submitAssessmentAttempt(attemptId: string, rawAnswers: unknown) {
