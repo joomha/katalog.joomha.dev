@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { SubmitAssessmentAttemptSchema } from "../schemas/assessment.schema";
 import { attemptDeadline, evaluateAttemptAvailability, scoreAssessment, shuffle, type QuestionDefinition } from "./assessment-engine";
 import { requireLearningManager, requireLearningUser } from "./identity.adapter";
-import { canAccessChapter, canStartChapterExam, canStartFinalExam } from "./progression.service";
+import { canAccessChapter, canStartLessons, canStartChapterExam, canStartFinalExam } from "./progression.service";
 import { getActiveEnrollmentForCourse, loadChapterGateStates } from "./progression-query.service";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -33,6 +33,13 @@ export async function startAssessmentAttempt(assessmentId: string) {
     const index = gates.findIndex((chapter) => chapter.id === assessment.chapterId);
     if (!canAccessChapter(index, gates).allowed) throw new Error("Chapter sebelumnya belum diselesaikan.");
   }
+  if (assessment.chapterId && assessment.stage !== "PRETEST") {
+    const chapter = gates.find((item) => item.id === assessment.chapterId);
+    if (!chapter || !canStartLessons(chapter).allowed) {
+      throw new Error("Pretest wajib pada chapter ini harus lulus sebelum aktivitas berikutnya.");
+    }
+  }
+
   if (assessment.stage === "POSTTEST") {
     if (assessment.lessonId) {
       const requiredBlocks = await prisma.lessonContentBlock.findMany({
