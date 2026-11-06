@@ -148,14 +148,19 @@ export async function publishCourse(courseId: string) {
     where: { courseId, isRequired: true },
     include: {
       lessons: { where: { isRequired: true }, include: { contentBlocks: { where: { isRequired: true } } } },
-      assessments: { where: { isPublished: true, isRequired: true, stage: "CHAPTER_EXAM" } },
+      assessments: { where: { isPublished: true, isRequired: true, stage: { in: ["PRETEST", "CHAPTER_EXAM"] } } },
     },
   });
   if (!chapters.length) throw new Error("Course memerlukan minimal satu chapter wajib.");
   for (const chapter of chapters) {
     if (!chapter.isPublished || !chapter.lessons.length) throw new Error("Setiap chapter wajib dan lesson-nya harus diterbitkan.");
     const gatePolicy = (chapter.gatePolicy ?? {}) as { requireChapterExamPassed?: boolean };
-    if ((gatePolicy.requireChapterExamPassed ?? true) && chapter.assessments.length === 0) {
+    const chapterExam = chapter.assessments.some((assessment) => assessment.stage === "CHAPTER_EXAM");
+    const pretest = chapter.assessments.some((assessment) => assessment.stage === "PRETEST");
+    if (gatePolicy.pretestRequiredBeforeLessons && !pretest) {
+      throw new Error("Chapter yang mewajibkan pretest harus memiliki pretest wajib yang sudah diterbitkan.");
+    }
+    if ((gatePolicy.requireChapterExamPassed ?? true) && !chapterExam) {
       throw new Error("Setiap chapter gate wajib memiliki chapter exam yang diterbitkan.");
     }
     if (chapter.lessons.some((lesson) => lesson.contentBlocks.length === 0)) {
