@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { z, ZodError } from "zod";
 import { getAuthorizedFileAccess } from "@/modules/platform";
 import { UnauthenticatedError, AccessDeniedError } from "@/modules/identity/types";
 export async function GET(_request:Request,context:{params:Promise<{id:string}>}){
  try{
-  const {id}=await context.params,result=await getAuthorizedFileAccess(id);
+  const {id}=z.object({id:z.string().uuid()}).parse(await context.params),result=await getAuthorizedFileAccess(id);
   const asciiName=result.metadata.originalName.replace(/[^\x20-\x7e]/g,"_").replace(/["\\\\]/g,"_");
   const encodedName=encodeURIComponent(result.metadata.originalName);
   return new Response(Buffer.from(result.bytes),{headers:{
@@ -15,6 +16,7 @@ export async function GET(_request:Request,context:{params:Promise<{id:string}>}
   }});
  }catch(error){
   if(error instanceof UnauthenticatedError)return NextResponse.json({error:"UNAUTHENTICATED"},{status:401});
+  if(error instanceof ZodError)return NextResponse.json({error:"INVALID_FILE_ID"},{status:400});
   if(error instanceof AccessDeniedError)return NextResponse.json({error:"FORBIDDEN"},{status:403});
   const message=error instanceof Error?error.message:"";
   if(message==="File access denied")return NextResponse.json({error:"FORBIDDEN"},{status:403});
