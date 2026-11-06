@@ -20,39 +20,44 @@ export type GateReason =
   | "CHAPTER_EXAM_REQUIRED" | "COURSE_PREREQUISITES_INCOMPLETE" | "FINAL_EXAM_REQUIRED" | "MINIMUM_PROGRESS_NOT_MET";
 export interface GateResult { allowed: boolean; reason: GateReason; blockingIds: string[]; }
 
-export function lessonGateComplete(lesson: LessonGateState): boolean {
+export function lessonGateComplete(lesson: LessonGateState, requireCompletion = true): boolean {
   if (!lesson.required) return true;
-  return lesson.completed
+  return (!requireCompletion || lesson.completed)
     && (!lesson.posttestRequired || lesson.posttestPassed)
     && (!lesson.gameRequired || lesson.gamesCompleted)
     && (!lesson.assignmentRequired || lesson.assignmentSubmitted);
 }
-export function chapterComplete(chapter: ChapterGateState): boolean {
-  if (!chapter.required) return true;
-  if (!chapter.published || (chapter.pretestRequired && !chapter.pretestPassed)) return false;
-  if (chapter.allLessonsRequired && chapter.lessons.some((lesson) => lesson.required && !lesson.completed)) return false;
-  if (chapter.lessons.some((lesson) => !lessonGateComplete(lesson))) return false;
-  if (chapter.examRequired && !chapter.examPassed) return false;
-  return true;
-}
-export function canAccessChapter(targetIndex: number, chapters: readonly ChapterGateState[]): GateResult {
-  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= chapters.length)
-    return { allowed: false, reason: "CHAPTER_NOT_PUBLISHED", blockingIds: [] };
-  const target = chapters[targetIndex];
-  if (!target.published) return { allowed: false, reason: "CHAPTER_NOT_PUBLISHED", blockingIds: [target.id] };
-  for (const chapter of chapters.slice(0, targetIndex)) {
-    if (chapter.required && !chapterComplete(chapter))
-      return { allowed: false, reason: "PREVIOUS_CHAPTER_INCOMPLETE", blockingIds: [chapter.id] };
+export function canStartLessons(chapter: ChapterGateState): GateResult {
+  if (!chapter.published) return { allowed: false, reason: "CHAPTER_NOT_PUBLISHED", blockingIds: [chapter.id] };
+  if (chapter.pretestRequired && !chapter.pretestPassed) {
+    return { allowed: false, reason: "PRETEST_REQUIRED", blockingIds: [chapter.id] };
   }
   return { allowed: true, reason: "AVAILABLE", blockingIds: [] };
 }
+export function chapterComplete(chapter: ChapterGateState): boolean {
+  if (!chapter.required) return true;
+  if (!chapter.published || !canStartLessons(chapter).allowed) return false;
+  if (chapter.examRequired && !chapter.examPassed) return false;
+  return chapter.lessons.every((lesson) => lessonGateComplete(lesson, chapter.allLessonsRequired));
+}
+export function canAccessChapter(targetIndex: number, chapters: readonly ChapterGateState[]): GateResult {
+  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= chapters.length) {
+    return { allowed: false, reason: "CHAPTER_NOT_PUBLISHED", blockingIds: [] };
+  }
+  const target = chapters[targetIndex];
+  if (!target.published) return { allowed: false, reason: "CHAPTER_NOT_PUBLISHED", blockingIds: [target.id] };
+  for (const chapter of chapters.slice(0, targetIndex)) {
+    if (chapter.required && !chapterComplete(chapter)) {
+      return { allowed: false, reason: "PREVIOUS_CHAPTER_INCOMPLETE", blockingIds: [chapter.id] };
+    }
+  }
+  // The target chapter may remain accessible for its required pretest.
+  return { allowed: true, reason: "AVAILABLE", blockingIds: [] };
+}
 export function canStartChapterExam(chapter: ChapterGateState): GateResult {
-  if (!chapter.published) return { allowed: false, reason: "CHAPTER_NOT_PUBLISHED", blockingIds: [chapter.id] };
-  if (chapter.pretestRequired && !chapter.pretestPassed) return { allowed: false, reason: "PRETEST_REQUIRED", blockingIds: [chapter.id] };
-  const blockers = chapter.lessons.filter((lesson) => lesson.required && (
-    !lesson.completed || (lesson.posttestRequired && !lesson.posttestPassed)
-    || (lesson.gameRequired && !lesson.gamesCompleted) || (lesson.assignmentRequired && !lesson.assignmentSubmitted)
-  ));
+  const lessonGate = canStartLessons(chapter);
+  if (!lessonGate.allowed) return lessonGate;
+  const blockers = chapter.lessons.filter((lesson) => lesson.required && !lessonGateComplete(lesson, chapter.allLessonsRequired));
   if (blockers.length) {
     const posttest = blockers.some((lesson) => lesson.posttestRequired && !lesson.posttestPassed);
     const game = blockers.some((lesson) => lesson.gameRequired && !lesson.gamesCompleted);
@@ -63,6 +68,7 @@ export function canStartChapterExam(chapter: ChapterGateState): GateResult {
       blockingIds: blockers.map((lesson) => lesson.id),
     };
   }
+  if (chapter.examRequired && !chapter.examPassed) return { allowed: true, reason: "AVAILABLE", blockingIds: [] };
   return { allowed: true, reason: "AVAILABLE", blockingIds: [] };
 }
 export function canStartFinalExam(chapters: readonly ChapterGateState[]): GateResult {
