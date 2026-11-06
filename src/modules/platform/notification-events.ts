@@ -3,7 +3,8 @@ import type { NotificationCategory } from "@prisma/client";
 import { createNotificationFromSystemEvent } from "./notification.service";
 export interface PlatformDomainEvent {eventId:string;eventName:string;payload:Record<string,unknown>}
 interface Template {category:NotificationCategory;title:string;body:string;resourceUrl:string}
-const USER_ID_PATTERN=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\nconst TEMPLATES:Record<string,Template>={
+const USER_ID_PATTERN=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TEMPLATES:Record<string,Template>={
  "OrderPaid":{category:"TRANSACTIONAL",title:"Pembayaran berhasil",body:"Pembayaran Anda telah diverifikasi. Detail pesanan tersedia di akun Joomha.",resourceUrl:"/akun/pesanan"},
  "OrderCancelled":{category:"TRANSACTIONAL",title:"Pesanan dibatalkan",body:"Pesanan Anda telah dibatalkan. Periksa akun untuk melihat informasi lebih lanjut.",resourceUrl:"/akun/pesanan"},
  "EnrollmentCreated":{category:"LEARNING",title:"Kelas sudah tersedia",body:"Pendaftaran kelas Anda berhasil. Silakan buka area pembelajaran untuk mulai belajar.",resourceUrl:"/belajar"},

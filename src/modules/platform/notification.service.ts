@@ -7,7 +7,8 @@ import { sendEmailWithRetry } from "./notification-email";
 const SAFE_PATH=/^\/(?!\/)[\w\-/?.=&%#]*$/;
 function safePath(path?:string){if(!path)return null;let decoded:string;try{decoded=decodeURIComponent(path);}catch{throw new Error("Invalid notification resource path");}if(!SAFE_PATH.test(path)||decoded.startsWith("//")||decoded.includes(".."))throw new Error("Unsafe notification resource path");return path;}
 async function persistNotification(input:CreateNotificationInput){
- const title=input.title.trim().slice(0,160),body=input.body.trim().slice(0,1200);\n if(input.dedupeKey&&input.dedupeKey.length>240)throw new Error("Notification dedupe key is too long");
+ const title=input.title.trim().slice(0,160),body=input.body.trim().slice(0,1200);
+ if(input.dedupeKey&&input.dedupeKey.length>240)throw new Error("Notification dedupe key is too long");
  if(!title||!body)throw new Error("Notification title and body are required");
  const pref=await prisma.notificationPreference.findUnique({where:{userId_category:{userId:input.userId,category:input.category}}});
  let notification=null,created=true;
