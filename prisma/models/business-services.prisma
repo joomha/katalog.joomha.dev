@@ -1,5 +1,347 @@
-// ==============================================================================
+// =============================================================================
 // BUSINESS SERVICES DOMAIN SCHEMA (Owned by Agent 07)
-// BusinessServiceRequest, BusinessProposal, ServiceMilestone, ProjectTracking
-// ==============================================================================
+// Katalog detail, request intake, proposal versioning, project delivery.
+// Identity/user references stay scalar UUIDs by cross-domain contract.
+// CatalogItem is linked through a unique catalogItemId (catalog schema owned
+// by Agent 03; resolve and validate the logical FK in domain services/seeds).
+// Migrations are owned by Agent 10.
+// =============================================================================
 
+enum BusinessRequestStatus {
+  NEW
+  NEEDS_DISCOVERY
+  IN_REVIEW
+  PROPOSAL_DRAFT
+  PROPOSAL_SENT
+  CONVERTED_TO_PROJECT
+  CLOSED
+  CANCELLED
+}
+
+enum BusinessRequestSource {
+  WEBSITE_FORM
+  AI_HANDOFF
+  ADMIN
+}
+
+enum BusinessProposalStatus {
+  DRAFT
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum BusinessProposalRevisionStatus {
+  DRAFT
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum BusinessProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectMilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  REVIEW
+  ACCEPTED
+  CHANGES_REQUESTED
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectDeliverableType {
+  FILE
+  LINK
+  DESCRIPTION
+}
+
+enum ProjectDeliverableReviewStatus {
+  PENDING_REVIEW
+  ACCEPTED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum ProjectProgressVisibility {
+  CUSTOMER
+  INTERNAL
+}
+
+enum ProjectPaymentTermStatus {
+  PLANNED
+  INVOICE_REQUESTED
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+model BusinessServiceDefinition {
+  id                    String   @id @default(cuid())
+  catalogItemId         String   @unique
+  slug                  String   @unique
+  summary               String   @db.VarChar(320)
+  longDescription       String   @db.Text
+  customerProblems      String[]
+  targetUsers           String[]
+  possibleDeliverables  String[]
+  sampleScope           String[]
+  customerPreparation   String[]
+  pricingFactors        String[]
+  durationFactors       String[]
+  ctaLabel              String
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("business_service_definitions")
+}
+
+model BusinessServiceRequest {
+  id                  String                @id @default(cuid())
+  userId              String?               @db.Uuid
+  serviceDefinitionId String?
+  serviceSlug         String?
+  serviceTitleSnapshot String?
+  status              BusinessRequestStatus @default(NEW)
+  source              BusinessRequestSource @default(WEBSITE_FORM)
+  contactName         String
+  contactEmail        String
+  contactPhone        String?
+  contactConsentAt    DateTime
+  businessName        String?
+  businessType        String?
+  organizationSize    String?
+  currentProcess      String?               @db.Text
+  mainProblem         String                @db.Text
+  workVolume          String?
+  currentTools        String[]
+  desiredOutcome      String                @db.Text
+  integrationNeeds    String[]
+  budgetMin           Decimal?              @db.Decimal(14, 2)
+  budgetMax           Decimal?              @db.Decimal(14, 2)
+  budgetNote          String?               @db.Text
+  targetDate          DateTime?
+  attachments         Json?
+  consultationLeadId  String?
+  assignedToUserId    String?               @db.Uuid
+  internalNotes       String?               @db.Text
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  proposals BusinessProposal[]
+  projects  BusinessProject[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([assignedToUserId, status])
+  @@index([serviceSlug])
+  @@index([consultationLeadId])
+  @@map("business_service_requests")
+}
+
+model BusinessProposal {
+  id                String                 @id @default(cuid())
+  proposalCode      String                 @unique
+  requestId         String
+  status            BusinessProposalStatus @default(DRAFT)
+  currentVersion    Int                    @default(1)
+  createdByUserId   String                 @db.Uuid
+  acceptedAt        DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?                @db.Text
+  withdrawnAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  request   BusinessServiceRequest    @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  revisions BusinessProposalRevision[]
+  project   BusinessProject?
+
+  @@index([requestId, createdAt])
+  @@index([status, updatedAt])
+  @@map("business_proposals")
+}
+
+model BusinessProposalRevision {
+  id                      String                            @id @default(cuid())
+  proposalId              String
+  version                 Int
+  status                  BusinessProposalRevisionStatus    @default(DRAFT)
+  title                   String
+  problemStatement        String                            @db.Text
+  scopeIn                 String[]
+  scopeOut                String[]
+  deliverables            String[]
+  timelineSummary         String
+  estimatedDurationDays   Int
+  plannedStartAt          DateTime?
+  targetCompletionAt      DateTime?
+  totalAmount             Decimal                           @db.Decimal(14, 2)
+  currency                String                            @default("IDR")
+  milestonePlan           Json
+  paymentTerms            Json
+  assumptions             String[]
+  customerDependencies    String[]
+  acceptanceCriteria      String[]
+  exclusions              String[]
+  validUntil              DateTime
+  approvedByUserId        String?                           @db.Uuid
+  approvedAt              DateTime?
+  sentAt                  DateTime?
+  customerDecisionAt      DateTime?
+  customerFeedback        String?                           @db.Text
+  createdByUserId         String                            @db.Uuid
+  createdAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+
+  proposal          BusinessProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  acceptedInProject BusinessProject?  @relation("AcceptedProposalRevision")
+
+  @@unique([proposalId, version])
+  @@index([proposalId, status])
+  @@index([validUntil])
+  @@map("business_proposal_revisions")
+}
+
+model BusinessProject {
+  id                         String               @id @default(cuid())
+  projectCode                String               @unique
+  requestId                  String
+  proposalId                 String               @unique
+  proposalRevisionId         String               @unique
+  customerUserId             String?              @db.Uuid
+  assignedToUserId           String?              @db.Uuid
+  title                      String
+  summary                    String               @db.Text
+  status                     BusinessProjectStatus @default(PLANNED)
+  scopeSnapshot              Json
+  totalAmount                Decimal              @db.Decimal(14, 2)
+  currency                   String               @default("IDR")
+  plannedStartAt             DateTime?
+  targetCompletionAt         DateTime?
+  startedAt                  DateTime?
+  completedAt                DateTime?
+  handoverSummary            String?              @db.Text
+  handoverConfirmedAt        DateTime?
+  handoverConfirmedByUserId  String?              @db.Uuid
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  request          BusinessServiceRequest  @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  proposal         BusinessProposal        @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  acceptedRevision BusinessProposalRevision @relation("AcceptedProposalRevision", fields: [proposalRevisionId], references: [id], onDelete: Restrict)
+  milestones       ProjectMilestone[]
+  deliverables     ProjectDeliverable[]
+  paymentTerms     ProjectPaymentTerm[]
+  updates          ProjectProgressUpdate[]
+
+  @@index([customerUserId, status])
+  @@index([assignedToUserId, status])
+  @@index([status, updatedAt])
+  @@map("business_projects")
+}
+
+model ProjectMilestone {
+  id                 String                 @id @default(cuid())
+  projectId          String
+  title              String
+  description        String                 @db.Text
+  sequence           Int
+  targetDate         DateTime?
+  status             ProjectMilestoneStatus @default(PENDING)
+  progress           Int                    @default(0)
+  acceptanceCriteria String[]
+  completedAt        DateTime?
+  customerFeedback   String?                @db.Text
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  project      BusinessProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverables ProjectDeliverable[]
+
+  @@unique([projectId, sequence])
+  @@index([projectId, status])
+  @@map("project_milestones")
+}
+
+model ProjectDeliverable {
+  id                String                          @id @default(cuid())
+  projectId         String
+  milestoneId       String?
+  title             String
+  description       String                          @db.Text
+  type              ProjectDeliverableType
+  fileName          String?
+  storageKey        String?
+  externalUrl       String?
+  version           Int                             @default(1)
+  uploadedByUserId  String                          @db.Uuid
+  reviewStatus      ProjectDeliverableReviewStatus  @default(PENDING_REVIEW)
+  reviewerUserId    String?                         @db.Uuid
+  reviewedAt        DateTime?
+  feedback          String?                         @db.Text
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+
+  project   BusinessProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([milestoneId])
+  @@index([reviewStatus])
+  @@map("project_deliverables")
+}
+
+model ProjectPaymentTerm {
+  id                 String                  @id @default(cuid())
+  projectId          String
+  sequence           Int
+  label              String
+  description        String?
+  amount             Decimal                 @db.Decimal(14, 2)
+  currency           String                  @default("IDR")
+  dueAt              DateTime?
+  paymentReferenceId String?                 @unique
+  status             ProjectPaymentTermStatus @default(PLANNED)
+  paidAt             DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  project BusinessProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sequence])
+  @@index([projectId, status])
+  @@map("project_payment_terms")
+}
+
+model ProjectProgressUpdate {
+  id          String                   @id @default(cuid())
+  projectId   String
+  authorId    String                   @db.Uuid
+  visibility  ProjectProgressVisibility @default(CUSTOMER)
+  message     String                   @db.Text
+  progress    Int?
+  createdAt   DateTime                 @default(now())
+
+  project BusinessProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, visibility, createdAt])
+  @@map("project_progress_updates")
+}
