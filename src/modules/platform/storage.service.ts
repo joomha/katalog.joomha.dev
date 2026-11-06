@@ -42,7 +42,7 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
   return {id:stored.id,ownerId:stored.ownerId,originalName:stored.originalName,mimeType:stored.mimeType,extension:stored.extension,sizeBytes:Number(stored.sizeBytes),visibility:stored.visibility,status:stored.status,metadata:stored.metadata,createdAt:stored.createdAt,updatedAt:stored.updatedAt} satisfies StoredFileMetadata;
  }catch(error){await adapter.delete(key);throw error;}
 }
-export async function getAuthorizedFileAccess(fileId:string,authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>){
+async function findAuthorizedFile(fileId:string,authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>){
  const file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
  if(!file)throw new Error("File not found");
  if(file.visibility==="PRIVATE"){
@@ -52,9 +52,19 @@ export async function getAuthorizedFileAccess(fileId:string,authorizeEntitlement
   const entitled=authorizeEntitlement?await authorizeEntitlement({id:file.id,ownerId:file.ownerId,metadata:file.metadata}):false;
   if(!isOwner&&!hasManage&&!entitled)throw new Error("File access denied");
  }
+ return file;
+}
+function toSafeMetadata(file:Awaited<ReturnType<typeof findAuthorizedFile>>):StoredFileMetadata{
+ return {id:file.id,ownerId:file.ownerId,originalName:file.originalName,mimeType:file.mimeType,extension:file.extension,sizeBytes:Number(file.sizeBytes),visibility:file.visibility,status:file.status,metadata:file.metadata,createdAt:file.createdAt,updatedAt:file.updatedAt};
+}
+export async function getStoredFileMetadata(fileId:string,authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>){
+ const file=await findAuthorizedFile(fileId,authorizeEntitlement);
+ return toSafeMetadata(file);
+}
+export async function getAuthorizedFileAccess(fileId:string,authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>){
+ const file=await findAuthorizedFile(fileId,authorizeEntitlement);
  const bytes=await getStorageAdapter().get(file.storageKey);
- const metadata={id:file.id,ownerId:file.ownerId,originalName:file.originalName,mimeType:file.mimeType,extension:file.extension,sizeBytes:Number(file.sizeBytes),visibility:file.visibility,status:file.status,metadata:file.metadata,createdAt:file.createdAt,updatedAt:file.updatedAt} satisfies StoredFileMetadata;
- return {metadata,bytes};
+ return {metadata:toSafeMetadata(file),bytes};
 }
 export async function deleteStoredFile(fileId:string){
  const actor=await assertAuthenticated(),file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
