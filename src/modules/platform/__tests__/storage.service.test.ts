@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks=vi.hoisted(()=>({findFirst:vi.fn(),get:vi.fn(),assertAuthenticated:vi.fn()}));
+const mocks=vi.hoisted(()=>{
+ class MockAccessDeniedError extends Error{}
+ return {findFirst:vi.fn(),get:vi.fn(),assertAuthenticated:vi.fn(),assertPermission:vi.fn(async()=>{throw new MockAccessDeniedError();}),MockAccessDeniedError};
+});
 vi.mock("server-only",()=>({}));
 vi.mock("@/lib/db/prisma",()=>({prisma:{storedFile:{findFirst:mocks.findFirst}}}));
-vi.mock("@/modules/identity/guards",()=>({assertAuthenticated:mocks.assertAuthenticated,assertPermission:vi.fn()}));
+vi.mock("@/modules/identity/types",()=>({AccessDeniedError:mocks.MockAccessDeniedError}));
+vi.mock("@/modules/identity/guards",()=>({assertAuthenticated:mocks.assertAuthenticated,assertPermission:mocks.assertPermission}));
 vi.mock("@/lib/storage",()=>({getStorageAdapter:()=>({get:mocks.get})}));
 import { getAuthorizedFileAccess } from "../storage.service";
 describe("stored file authorization",()=>{
