@@ -10,7 +10,7 @@ export async function GET(_request:Request,context:{params:Promise<{id:string}>}
   return new Response(Buffer.from(result.bytes),{headers:{
    "Content-Type":result.metadata.mimeType,
    "Content-Length":String(result.metadata.sizeBytes),
-   "Content-Disposition":'attachment; filename="'+asciiName+'"; filename*=UTF-8\'\''+encodedName,
+   "Content-Disposition":"attachment; filename=\""+asciiName+"\"; filename*=UTF-8"+String.fromCharCode(39,39)+encodedName,
    "X-Content-Type-Options":"nosniff",
    "Cache-Control":result.metadata.visibility==="PRIVATE"?"private, no-store":"public, max-age=300"
   }});
