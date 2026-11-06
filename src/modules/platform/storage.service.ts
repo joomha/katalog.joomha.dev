@@ -36,11 +36,13 @@ export async function uploadStoredFile(input:UploadStoredFileInput){
  if(input.bytes.byteLength===0||input.bytes.byteLength>max)throw new Error("File size is outside the allowed range");
  const checksum=createHash("sha256").update(input.bytes).digest("hex"),key=checksum.slice(0,2)+"/"+randomUUID()+"."+extension;
  const adapter=getStorageAdapter();await adapter.put({key,bytes:input.bytes,contentType:mime});
+ let stored;
  try{
-  const stored=await prisma.storedFile.create({data:{ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as Prisma.InputJsonObject):undefined}});
-  await writeAuditLog({actorId:actor.id,action:"platform.file.uploaded",targetType:"StoredFile",targetId:stored.id,metadata:{mimeType:mime,sizeBytes:input.bytes.byteLength,visibility:stored.visibility}});
-  return {id:stored.id,ownerId:stored.ownerId,originalName:stored.originalName,mimeType:stored.mimeType,extension:stored.extension,sizeBytes:Number(stored.sizeBytes),visibility:stored.visibility,status:stored.status,metadata:stored.metadata,createdAt:stored.createdAt,updatedAt:stored.updatedAt} satisfies StoredFileMetadata;
+  stored=await prisma.storedFile.create({data:{ownerId:input.ownerId??actor.id,originalName:name,storageKey:key,provider:process.env.STORAGE_DRIVER??"local",mimeType:mime,extension,sizeBytes:BigInt(input.bytes.byteLength),checksumSha256:checksum,visibility:input.visibility??"PRIVATE",metadata:input.metadata?(input.metadata as Prisma.InputJsonObject):undefined}});
  }catch(error){await adapter.delete(key);throw error;}
+ try{await writeAuditLog({actorId:actor.id,action:"platform.file.uploaded",targetType:"StoredFile",targetId:stored.id,metadata:{mimeType:mime,sizeBytes:input.bytes.byteLength,visibility:stored.visibility}});}
+ catch(error){console.error("[platform:audit-write-failed]",{action:"platform.file.uploaded",targetId:stored.id,errorCode:error instanceof Error?error.name:"UNKNOWN"});}
+ return {id:stored.id,ownerId:stored.ownerId,originalName:stored.originalName,mimeType:stored.mimeType,extension:stored.extension,sizeBytes:Number(stored.sizeBytes),visibility:stored.visibility,status:stored.status,metadata:stored.metadata,createdAt:stored.createdAt,updatedAt:stored.updatedAt} satisfies StoredFileMetadata;
 }
 async function findAuthorizedFile(fileId:string,authorizeEntitlement?:(file:{id:string;ownerId:string|null;metadata:unknown})=>Promise<boolean>){
  const file=await prisma.storedFile.findFirst({where:{id:fileId,status:"ACTIVE"}});
