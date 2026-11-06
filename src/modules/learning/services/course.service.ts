@@ -207,8 +207,11 @@ export async function publishChapter(chapterId: string) {
   });
   if (!chapter || chapter.course.status === "PUBLISHED") throw new Error("Chapter tidak ditemukan atau course sudah dipublikasikan.");
   if (!chapter.lessons.length) throw new Error("Terbitkan minimal satu lesson sebelum chapter.");
-  const policy = (chapter.gatePolicy ?? {}) as { requireChapterExamPassed?: boolean };
-  if ((policy.requireChapterExamPassed ?? true) && chapter.assessments.length === 0) throw new Error("Chapter ini memerlukan chapter exam yang diterbitkan.");
+  const policy = (chapter.gatePolicy ?? {}) as { pretestRequiredBeforeLessons?: boolean; requireChapterExamPassed?: boolean };
+  const hasPretest = chapter.assessments.some((assessment) => assessment.stage === "PRETEST");
+  const hasChapterExam = chapter.assessments.some((assessment) => assessment.stage === "CHAPTER_EXAM");
+  if (policy.pretestRequiredBeforeLessons && !hasPretest) throw new Error("Chapter ini mewajibkan pretest yang sudah diterbitkan.");
+  if ((policy.requireChapterExamPassed ?? true) && !hasChapterExam) throw new Error("Chapter ini memerlukan chapter exam yang diterbitkan.");
   return prisma.courseChapter.update({ where: { id: chapterId }, data: { isPublished: true } });
 }
 export async function createLesson(input: unknown) {
