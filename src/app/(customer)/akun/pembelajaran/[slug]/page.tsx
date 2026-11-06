@@ -109,12 +109,18 @@ export default async function EnrolledCoursePage({ params }: PageProps) {
                 </article>)}
               </>}
               {chapter.chapterAssessments.filter((assessment) => assessment.stage === "CHAPTER_EXAM").map((assessment) => <div key={assessment.id} className="mt-5 rounded-lg border p-3">
-                <h4 className="text-sm font-semibold">{assessment.title}</h4><AssessmentRunner assessmentId={assessment.id} />
+                <h4 className="text-sm font-semibold">{assessment.title}</h4>
+                {assessment.isAvailable
+                  ? <AssessmentRunner assessmentId={assessment.id} />
+                  : <p className="mt-2 text-sm text-muted-foreground">Ujian chapter terbuka setelah semua lesson, posttest, game wajib, dan tugas wajib chapter ini selesai.</p>}
               </div>)}
             </>}
           </section>)}
           {data.finalAssessments.map((assessment) => <section key={assessment.id} className="rounded-xl border bg-card p-5">
-            <h3 className="font-semibold">Final exam: {assessment.title}</h3><AssessmentRunner assessmentId={assessment.id} />
+            <h3 className="font-semibold">Final exam: {assessment.title}</h3>
+            {assessment.isAvailable
+              ? <AssessmentRunner assessmentId={assessment.id} />
+              : <p className="mt-2 text-sm text-muted-foreground">Selesaikan seluruh persyaratan chapter terlebih dahulu untuk membuka final exam.</p>}
           </section>)}
           {data.enrollment.status === "ACTIVE" && <form action={completeCourseAction} className="rounded-xl border bg-card p-5">
             <input type="hidden" name="courseId" value={data.course.id} />
