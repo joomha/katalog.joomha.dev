@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import type { ChatMessage } from "../providers/provider.types";
 import { OpenRouterProvider } from "../providers/openrouter.provider";
 import { ProviderError } from "../providers/provider.types";
 import { buildConsultantSystemPrompt } from "../prompts/consultant-prompts";
@@ -30,21 +31,31 @@ export async function sendConsultationMessage(input: unknown, userId?: string) {
     return { conversationId: conversation.id, status: conversation.status, assistantUnavailable: true, message: "Percakapan ini sedang ditangani tim Joomha. Silakan tunggu balasan admin/instruktur." };
   }
 
+  const recentCount = await prisma.consultationMessage.count({
+    where: { conversationId: conversation.id, createdAt: { gte: new Date(Date.now() - 60_000) } },
+  });
+  if (recentCount >= 12) throw new Error("Batas pesan tercapai. Tunggu satu menit sebelum mengirim pesan lagi.");
   await prisma.consultationMessage.create({ data: { conversationId: conversation.id, role: "USER", content: data.message } });
   const history = await prisma.consultationMessage.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: MAX_HISTORY });
-  const messages = history.reverse().map((item) => ({ role: item.role === "USER" ? "user" as const : item.role === "TOOL" ? "tool" as const : "assistant" as const, content: item.content }));
+  const messages: ChatMessage[] = history.reverse().map((item) => ({
+    role: item.role === "USER" ? "user" : item.role === "TOOL" ? "tool" : "assistant",
+    content: item.content.slice(0, 3_000),
+  }));
   let retrievedContext: string[] = [];
+  let retrievedSources: Array<{ documentId: string; chunkId: string; title: string }> = [];
   try {
-    const retrieved = await retrieveKnowledge(data.message, new OpenRouterEmbeddingProvider(), {
-      limit: 5,
-      roles: userId ? ["CUSTOMER"] : [],
-    });
-    retrievedContext = retrieved.map((item) => `[${item.title}] ${item.content}`);
+    const roles = userId
+      ? (await prisma.userRole.findMany({ where: { userId }, select: { role: true } })).map((item) => item.role)
+      : [];
+    const retrieved = await retrieveKnowledge(data.message, new OpenRouterEmbeddingProvider(), { limit: 5, roles });
+    retrievedContext = retrieved.map((item) => `[${item.title}] ${item.content.slice(0, 1_600)}`);
+    retrievedSources = retrieved.map((item) => ({ documentId: item.documentId, chunkId: item.chunkId, title: item.title }));
   } catch {
     retrievedContext = [];
+    retrievedSources = [];
   }
-  const prompt = [
-    { role: "system" as const, content: buildConsultantSystemPrompt(data.mode as ConsultationMode, retrievedContext) },
+  const prompt: ChatMessage[] = [
+    { role: "system", content: buildConsultantSystemPrompt(data.mode as ConsultationMode, retrievedContext) },
     ...messages,
   ];
   try {
@@ -62,7 +73,7 @@ export async function sendConsultationMessage(input: unknown, userId?: string) {
     }
     const content = result.content.trim() || "Saya sudah memeriksa informasi yang tersedia. Apa detail lain yang ingin Anda pastikan?";
     const assistantMessage = await prisma.consultationMessage.create({
-      data: { conversationId: conversation.id, role: "ASSISTANT", content, model: result.model, promptTokens: result.usage?.promptTokens, completionTokens: result.usage?.completionTokens },
+      data: { conversationId: conversation.id, role: "ASSISTANT", content, model: result.model, promptTokens: result.usage?.promptTokens, completionTokens: result.usage?.completionTokens, sourceRefs: retrievedSources },
     });
     await prisma.consultationConversation.update({ where: { id: conversation.id }, data: { mode: data.mode, lastMessageAt: assistantMessage.createdAt } });
     return { conversationId: conversation.id, status: conversation.status, message: content };
