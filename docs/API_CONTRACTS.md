@@ -120,9 +120,56 @@ driver SMTP (saat ini `MAIL_DRIVER=console` mencetak tautan ke log server).
 
 *(Belum dipublikasikan.)*
 
-## Learning Module (Agent 05)
+## Learning Module (Agent 05) — \`src/modules/learning/index.ts\`
 
-*(Belum dipublikasikan.)*
+Semua operasi domain LMS diekspor dari entry point ini. Modul ini server-only karena memuat enrollment, answer key, attempt, progress, dan sertifikat.
+
+### Public course API
+- \`listPublishedCourses()\` — daftar course yang statusnya \`PUBLISHED\`.
+- \`getPublishedCourseBySlug(slug)\` — detail course dan kurikulum publik; tidak mengembalikan answer key atau file privat.
+- \`createCourse(input)\`, \`updateCourse(courseId, input)\`, \`publishCourse(courseId)\`.
+- \`createChapter(input)\`, \`publishChapter(chapterId)\`.
+- \`createLesson(input)\`, \`publishLesson(lessonId)\`, \`createLessonContentBlock(input)\`.
+- \`getAdminCourseBySlug(slug)\`, \`listAdminCourses()\` — membutuhkan permission \`learning.manage\`.
+
+### Student, progress, assessment dan game
+- \`getCurrentStudentCourses()\`, \`getEnrolledCoursePlayer(slug)\`.
+- \`markContentBlockViewed(contentBlockId)\`, \`markLessonStarted(lessonId)\`, \`markLessonCompleted(lessonId)\`.
+- \`startAssessmentAttempt(assessmentId)\`, \`submitAssessmentAttempt(attemptId, { answers })\`.
+- \`startGameAttempt(gameId)\`, \`submitGameAttempt(attemptId, { gameId, answers })\`.
+- \`submitAssignment(input)\`, \`getMyAssignmentSubmissions(courseId)\`.
+- \`completeCourseEnrollment(courseId)\`, \`listMyCertificates()\`, \`verifyCertificate(code)\`.
+
+Keputusan penilaian dan progression hanya memakai konfigurasi/kunci jawaban yang tersimpan di server. Serializer student menghilangkan \`isCorrect\`, \`correctAnswer\`, accepted answer, pasangan matching, dan answer key lainnya. Status timer dihitung dari timestamp attempt server. Tidak ada \`eval()\` atau executable code di konfigurasi game.
+
+### OrderPaid integration (Agent 04 → Agent 05)
+Agent 05 menyediakan \`registerLearningOrderPaidHandler()\` dari \`src/modules/learning/events/order-paid.ts\`.
+
+Payload yang diharapkan:
+\`\`\`ts
+type OrderPaidPayload = {
+  orderId: string;
+  userId: string; // UUID User
+  items: Array<{ catalogItemId: string; quantity?: number }>;
+};
+\`\`\`
+
+Handler hanya membuat enrollment untuk Course yang terhubung dengan \`CatalogItem\` bertipe \`SELF_PACED_COURSE\` dan sudah \`AVAILABLE\`/Course \`PUBLISHED\`. Enrollment idempotent per course + user. Agent 04 dan Agent 10 harus menyamakan payload event final dan mendaftarkan handler saat bootstrap integrasi. Browser redirect atau status client tidak pernah menjadi bukti pembayaran.
+
+### Events (Agent 05 → Agent 09)
+- \`CourseCompleted\`: \`{ enrollmentId, courseId, userId, courseTitle, completedAt }\`.
+- \`CertificateIssued\`: \`{ certificateId, certificateNumber, verificationCode, enrollmentId, userId }\`.
+
+Kedua event baru diterbitkan setelah perubahan persisten berhasil. Handler notifikasi Agent 09 perlu idempotent terhadap event delivery ulang.
+
+### Certificate
+Sertifikat internal memiliki nomor unik, snapshot nama peserta/kursus/penerbit, waktu terbit, kode verifikasi publik, status \`ISSUED/REVOKED\`, dan PDF yang dibuat dari record terbit. Verifikasi publik tersedia di \`/verifikasi-sertifikat/[code]\`. Sertifikat ini hanya bukti penyelesaian internal dan bukan sertifikasi kompetensi resmi/BNSP.
+
+### Schema, migration, dan file privacy
+- Schema learning dimiliki Agent 05 di \`prisma/models/learning.prisma\`.
+- Migration dan seed orchestration tetap milik Agent 10. Agent 05 hanya menyediakan \`prisma/seeds/learning.seed.ts\`.
+- Referensi User, CatalogItem, dan Order adalah scalar ID sesuai kontrak lintas-domain; tidak menambahkan Prisma relation lintas ownership.
+- Lesson content FILE wajib menggunakan private storage key. URL/storage authorization perlu dihubungkan ke file-storage service Agent 09 sebelum file unduhan diaktifkan di production.
 
 ## Tutoring Module (Agent 06)
 
