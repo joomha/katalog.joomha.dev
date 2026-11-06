@@ -1,5 +1,92 @@
 // ==============================================================================
 // CATALOG DOMAIN SCHEMA (Owned by Agent 03)
-// CatalogItem, Category, Tag, Asset
+// CatalogCategory, CatalogItem, CatalogAsset
 // ==============================================================================
 
+enum CatalogItemType {
+  DIGITAL_PRODUCT
+  SELF_PACED_COURSE
+  PRIVATE_TUTORING
+  BUSINESS_SERVICE
+}
+
+enum CatalogItemStatus {
+  DRAFT
+  COMING_SOON
+  AVAILABLE
+  ARCHIVED
+}
+
+enum PriceType {
+  FIXED
+  STARTING_AT
+  CONSULTATION_BASED
+}
+
+model CatalogCategory {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  description  String?
+  icon         String?
+  displayOrder Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  items        CatalogItem[]
+
+  @@map("catalog_categories")
+}
+
+model CatalogItem {
+  id                String            @id @default(cuid())
+  title             String
+  slug              String            @unique
+  shortDescription  String
+  description       String            @db.Text
+  type              CatalogItemType
+  status            CatalogItemStatus @default(COMING_SOON)
+  priceType         PriceType         @default(FIXED)
+  basePrice         Decimal?          @db.Decimal(12, 2)
+  discountPrice     Decimal?          @db.Decimal(12, 2)
+  priceLabel        String
+  categoryId        String
+  category          CatalogCategory   @relation(fields: [categoryId], references: [id])
+  field             String            // Bidang: "Office & Produktivitas", "Artificial Intelligence", "Pemrograman", "Digitalisasi & Web"
+  level             String?           // "Semua Tingkat", "Pemula", "Menengah", "Lanjutan"
+  method            String?           // "Self-Paced Online", "Online & Offline", "Proyek Kustom"
+  duration          String?           // Estimasi durasi atau timeline
+  targetAudience    String[]
+  learningOutcomes  String[]
+  prerequisites     String[]
+  features          String[]
+  curriculumSummary Json?             // Ringkasan bab / cakupan materi
+  faqs              Json?             // Array of { question, answer }
+  ctaType           String            // "BUY_NOW", "VIEW_COURSE", "CONSULT_TUTORING", "REQUEST_PROPOSAL"
+  ctaText           String
+  ctaLink           String
+  isFeatured        Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  assets            CatalogAsset[]
+
+  @@index([type])
+  @@index([status])
+  @@index([field])
+  @@index([isFeatured])
+  @@map("catalog_items")
+}
+
+model CatalogAsset {
+  id           String      @id @default(cuid())
+  itemId       String
+  item         CatalogItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  assetType    String      // "COVER", "THUMBNAIL", "PREVIEW"
+  url          String
+  altText      String
+  isPrimary    Boolean     @default(false)
+  displayOrder Int         @default(0)
+  createdAt    DateTime    @default(now())
+
+  @@index([itemId])
+  @@map("catalog_assets")
+}
